@@ -1,6 +1,10 @@
 # tylomon
 
+<div align="center">
+  
 ![project logo](./docs/assets/logo.webp)
+
+</div>
 
 > Monitor HTTP traffic between Docker containers in real time, directly from the terminal.
 

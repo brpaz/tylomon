@@ -1,0 +1,111 @@
+version: "3"
+
+vars:
+  BINARY_NAME: tylomon
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  fmt:
+    desc: Format code
+    cmds:
+      - cargo fmt --all
+
+  fmt:check:
+    desc: Check formatting
+    cmds:
+      - cargo fmt --all --check
+
+  clippy:
+    desc: Run clippy lints
+    cmds:
+      - cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
+    desc: Run tests
+    cmds:
+      - cargo nextest run
+
+  build:
+    desc: Build debug binary
+    cmds:
+      - cargo build
+
+  build:release:
+    desc: Build release binary
+    cmds:
+      - cargo build --release --locked
+
+  run:
+    desc: Run in development mode
+    cmds:
+      - cargo run -- {{.CLI_ARGS}}
+
+  watch:
+    desc: Watch and rebuild on changes
+    cmds:
+      - cargo watch -x build
+
+  lint:
+    desc: Run all lints (fmt check + clippy)
+    cmds:
+      - task: fmt:check
+      - task: clippy
+
+  ci:
+    desc: Run full CI pipeline locally
+    cmds:
+      - task: fmt:check
+      - task: clippy
+      - task: test
+      - task: build:release
+
+  docker:build:
+    desc: Build Docker image
+    cmds:
+      - docker build -t tylomon:local .
+
+  docker:run:
+    desc: Run Docker image with network capabilities
+    cmds:
+      - >-
+        docker run --rm -it
+        --cap-add=NET_RAW --cap-add=NET_ADMIN
+        --network host
+        tylomon:local {{.CLI_ARGS}}
+
+  docs:serve:
+    desc: Serve documentation locally
+    cmds:
+      - mkdocs serve
+
+  docs:build:
+    desc: Build documentation site
+    cmds:
+      - mkdocs build --strict
+
+  example:up:
+    desc: Start example Docker Compose services
+    dir: examples
+    cmds:
+      - docker compose up -d
+
+  example:down:
+    desc: Stop example Docker Compose services
+    dir: examples
+    cmds:
+      - docker compose down
+
+  example:logs:
+    desc: Show example service logs
+    dir: examples
+    cmds:
+      - docker compose logs -f
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - cargo clean

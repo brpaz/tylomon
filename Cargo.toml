@@ -1,0 +1,57 @@
+[package]
+name = "tylomon"
+version = "0.1.0"
+edition = "2024"
+description = "Monitor HTTP traffic between Docker containers"
+license = "MIT"
+repository = "https://github.com/brunopaz/tylomon"
+
+[[bin]]
+name = "tylomon"
+path = "src/main.rs"
+
+[dependencies]
+# TUI
+ratatui = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+futures = "0.3"
+
+# Docker API
+bollard = "0.18"
+
+# Packet capture & parsing
+pcap = { version = "2", features = ["capture-stream"] }
+etherparse = "0.16"
+
+# HTTP parsing
+httparse = "1"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Error handling
+color-eyre = "0.6"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Clipboard
+arboard = "3"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+
+[dev-dependencies]
+pretty_assertions = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

@@ -1,0 +1,57 @@
+# Example Docker Compose setup for testing tylomon
+#
+# Start the services:
+#   docker compose -f examples/docker-compose.yml up -d
+#
+# Monitor with tylomon:
+#   sudo tylomon --project examples
+#
+# Or by network name:
+#   sudo tylomon --network examples_default
+#
+# The setup creates three services:
+#   - api:      Nginx serving a simple JSON endpoint
+#   - poller:   Hits the API every 2 seconds
+#   - gateway:  Nginx reverse proxy that forwards to the API
+#
+# Traffic flow:
+#   poller → gateway → api
+#
+# You should see HTTP requests between all three containers in tylomon.
+
+services:
+  api:
+    image: nginx:alpine
+    volumes:
+      - ./nginx-api.conf:/etc/nginx/conf.d/default.conf:ro
+
+  gateway:
+    image: nginx:alpine
+    volumes:
+      - ./nginx-gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+
+  poller:
+    image: curlimages/curl:latest
+    depends_on:
+      - gateway
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        while true; do
+          echo "--- $$(date) ---"
+          curl -s -H "X-Request-Id: $$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 8)" \
+               -H "Accept: application/json" \
+               http://gateway/api/health
+          echo ""
+          sleep 2
+          curl -s -X POST \
+               -H "Content-Type: application/json" \
+               -H "X-Request-Id: $$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 8)" \
+               -d '{"action":"ping","timestamp":"'"$$(date -Iseconds)"'"}' \
+               http://gateway/api/echo
+          echo ""
+          sleep 2
+        done

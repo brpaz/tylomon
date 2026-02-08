@@ -55,7 +55,7 @@ sudo cp target/release/tylomon /usr/local/bin/
 #### Docker
 
 ```bash
-docker pull ghcr.io/brunopaz/tylomon:latest
+docker pull ghcr.io/brpaz/tylomon:latest
 ```
 
 ## Usage
@@ -78,7 +78,7 @@ sudo tylomon --network my-network-name
 docker run --rm -it \
   --cap-add=NET_RAW --cap-add=NET_ADMIN \
   --network host \
-  ghcr.io/brunopaz/tylomon:latest \
+  ghcr.io/brpaz/tylomon:latest \
   --project my-compose-project
 ```
 
@@ -187,7 +187,7 @@ src/
 
 ## Documentation
 
-Full documentation is available at [https://brunopaz.github.io/tylomon](https://brunopaz.github.io/tylomon).
+Full documentation is available at [https://brpaz.github.io/tylomon](https://brpaz.github.io/tylomon).
 
 ## License
 

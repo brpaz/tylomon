@@ -20,16 +20,16 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 
 use bollard::Docker;
-use color_eyre::eyre::Result;
+use anyhow::Result;
 
 use crate::capture::bridge::bridge_interface_name;
 ```
 
 ### Error handling
 
-- Use `color_eyre::eyre::Result` for fallible functions
+- Use `anyhow::Result` for fallible functions
 - Use `Option` for parsing functions that may not find valid input
-- Use `eyre!("message")` for ad-hoc errors
+- Use `anyhow!("message")` for ad-hoc errors
 - Custom errors live in `src/error.rs`
 - No `unwrap()` in production code — use `?`, `.ok()`, or `unwrap_or_else`
 

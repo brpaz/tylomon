@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
+use anyhow::Result;
 use bollard::Docker;
-use color_eyre::eyre::Result;
 
 /// Resolves container IPs to container/service names
 pub struct ContainerResolver {

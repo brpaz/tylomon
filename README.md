@@ -9,7 +9,7 @@
 > Monitor HTTP traffic between Docker containers in real time, directly from the terminal.
 
 > [!WARNING]  
-> This project was done to solve a personal itch and it was completely Vibe Coded using Claude Opus 4.6. Use it at your own risk.
+> This project was fully Vibecoded by Opus 4.6. It was done as a way to experiment with AI workflows and to solve a specific itch of mine. Use it at your own risk!
 
 ## About
 

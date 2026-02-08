@@ -4,7 +4,7 @@ pub mod views;
 
 use std::io::{self, Stdout};
 
-use color_eyre::eyre::Result;
+use anyhow::Result;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,

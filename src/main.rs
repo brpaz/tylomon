@@ -1,8 +1,8 @@
 use std::time::Duration;
 
+use anyhow::{Result, anyhow};
 use bollard::Docker;
 use clap::Parser;
-use color_eyre::eyre::{Result, eyre};
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -53,17 +53,16 @@ async fn discover_network(cli: &Cli) -> Result<NetworkInfo> {
         return networks
             .into_iter()
             .next()
-            .ok_or_else(|| eyre!("No networks found for compose project '{project}'"));
+            .ok_or_else(|| anyhow!("No networks found for compose project '{project}'"));
     }
 
-    Err(eyre!(
+    Err(anyhow!(
         "Specify either --project <compose-project> or --network <docker-network>"
     ))
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    color_eyre::install()?;
     let cli = Cli::parse();
 
     let _guard = setup_tracing(&cli.log_file)?;

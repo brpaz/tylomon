@@ -129,7 +129,7 @@ Use `httparse` push-parser:
 | Async runtime | `tokio` | Event loop + channels | Required by bollard; crossterm EventStream |
 | Serialization | `serde` + `serde_json` | HTTP body pretty-print | JSON body inspection |
 | CLI args | `clap` | Argument parsing | Standard |
-| Error handling | `color-eyre` | Error reporting | Colored backtraces |
+| Error handling | `anyhow` | Error reporting | Ergonomic error handling |
 | Logging | `tracing` | Structured logging | File-based (can't log to stdout in TUI) |
 
 ---

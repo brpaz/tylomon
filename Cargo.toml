@@ -34,7 +34,7 @@ httparse = "1"
 clap = { version = "4", features = ["derive"] }
 
 # Error handling
-color-eyre = "0.6"
+anyhow = "1"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

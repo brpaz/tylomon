@@ -1,5 +1,5 @@
+use anyhow::{Result, anyhow};
 use bollard::Docker;
-use color_eyre::eyre::{Result, eyre};
 
 /// Information about a discovered Docker network
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ pub async fn discover_project_networks(docker: &Docker, project: &str) -> Result
     let networks = docker
         .list_networks(Some(ListNetworksOptions { filters }))
         .await
-        .map_err(|e| eyre!("Failed to list Docker networks: {e}"))?;
+        .map_err(|e| anyhow!("Failed to list Docker networks: {e}"))?;
 
     let results: Vec<NetworkInfo> = networks
         .into_iter()
@@ -49,10 +49,10 @@ pub async fn discover_network_by_name(docker: &Docker, network_name: &str) -> Re
     let network = docker
         .inspect_network::<String>(network_name, None)
         .await
-        .map_err(|e| eyre!("Failed to inspect network '{network_name}': {e}"))?;
+        .map_err(|e| anyhow!("Failed to inspect network '{network_name}': {e}"))?;
 
-    let id = network.id.ok_or_else(|| eyre!("Network has no ID"))?;
-    let name = network.name.ok_or_else(|| eyre!("Network has no name"))?;
+    let id = network.id.ok_or_else(|| anyhow!("Network has no ID"))?;
+    let name = network.name.ok_or_else(|| anyhow!("Network has no name"))?;
     let bridge = crate::capture::bridge::bridge_interface_name(&id);
 
     Ok(NetworkInfo {

@@ -101,6 +101,6 @@ The main event loop renders the TUI at 30fps using `tokio::time::interval`. View
 | `httparse` | HTTP request/response parsing |
 | `bollard` | Docker Engine API client |
 | `clap` | CLI argument parsing |
-| `color-eyre` | Error handling and reporting |
+| `anyhow` | Error handling |
 | `tracing` | Structured logging |
 | `serde` / `serde_json` | Serialization and JSON pretty-printing |

@@ -107,7 +107,7 @@ tests/
 - Enum variants: `PascalCase` — `Action::NewExchange`, `Pane::Detail`
 
 ### Types & Patterns
-- Error handling: `color_eyre::eyre::Result` for fallible functions, `Option` for parsing
+- Error handling: `anyhow::Result` for fallible functions, `Option` for parsing
 - Custom errors: `Error` enum in `error.rs` with `Display` and `std::error::Error` impls
 - Ad-hoc errors: `eyre!("message")` for one-off failures
 - Async: `tokio` runtime, `mpsc::channel` for inter-task communication

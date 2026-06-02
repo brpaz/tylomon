@@ -22,11 +22,11 @@ jobs:
     name: Build Documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6.2.0
         with:
-          python-version: "3.14.4"
+          python-version: "3.14.5"
 
       - name: Install dependencies
         run: pip install mkdocs mkdocs-material
@@ -34,7 +34,7 @@ jobs:
       - name: Build docs
         run: mkdocs build --strict
 
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v4.0.0
         with:
           path: site
 
@@ -46,5 +46,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v4.0.5
         id: deployment

@@ -28,7 +28,7 @@ jobs:
           sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
 
       - name: Commit changelog and version bump
-        uses: stefanzweifel/git-auto-commit-action@v7.1.0
+        uses: stefanzweifel/git-auto-commit-action@v7.2.0
         with:
           branch: main
           commit_message: "chore(release): [skip-ci] ${{ github.event.release.tag_name }}"

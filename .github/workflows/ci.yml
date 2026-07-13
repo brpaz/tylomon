@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload binary to release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v3.0.1
+        uses: softprops/action-gh-release@v3.0.2
         with:
           files: target/release/tylomon
 

@@ -1,23 +1,42 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "labels": ["dependencies"],
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": [
+    "dependencies"
+  ],
   "rangeStrategy": "pin",
   "packageRules": [
     {
-      "matchManagers": ["cargo"],
+      "matchManagers": [
+        "cargo"
+      ],
       "groupName": "rust dependencies",
       "automerge": false
     },
     {
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "github actions",
       "automerge": true
     },
     {
-      "matchManagers": ["dockerfile"],
+      "matchManagers": [
+        "dockerfile"
+      ],
       "groupName": "docker",
       "automerge": false
+    },
+    {
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "matchCurrentVersion": "!/^0/",
+      "automerge": true
     }
-  ]
+  ],
+  "minimumReleaseAge": "3 days"
 }

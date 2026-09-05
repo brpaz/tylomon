@@ -1,7 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    ":automergeMinor"
   ],
   "labels": [
     "dependencies"
@@ -28,14 +29,6 @@
       ],
       "groupName": "docker",
       "automerge": false
-    },
-    {
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "matchCurrentVersion": "!/^0/",
-      "automerge": true
     }
   ],
   "minimumReleaseAge": "3 days"

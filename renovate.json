@@ -1,14 +1,26 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    ":automergeMinor"
+    "config:best-practices",
+    ":automergeMinor",
+    ":prConcurrentLimit10"
   ],
   "labels": [
     "dependencies"
   ],
   "rangeStrategy": "pin",
+  "minimumReleaseAge": "3 days",
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"]
+  },
+  "osvVulnerabilityAlerts": true,
   "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "github actions"
+    },
     {
       "matchManagers": [
         "cargo"
@@ -18,18 +30,10 @@
     },
     {
       "matchManagers": [
-        "github-actions"
-      ],
-      "groupName": "github actions",
-      "automerge": true
-    },
-    {
-      "matchManagers": [
         "dockerfile"
       ],
       "groupName": "docker",
       "automerge": false
     }
-  ],
-  "minimumReleaseAge": "3 days"
+  ]
 }

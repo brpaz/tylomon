@@ -69,6 +69,7 @@ src/
     packet.rs          # parse_packet() — raw bytes → ParsedPacket via etherparse
     stream.rs          # StreamReassembler — TCP flow tracking, sequence reassembly, drain()
     pipeline.rs        # Capture/replay threads, HTTP extraction, pcap Recorder, stale sweep
+    postgres.rs        # PostgreSQL wire protocol decoder (PgTracker), emits Protocol::Postgres exchanges
   docker/
     compose.rs         # Compose file / COMPOSE_FILE project detection
     discovery.rs       # Target resolution, network discovery via bollard

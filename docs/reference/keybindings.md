@@ -112,7 +112,8 @@ Filters are case-insensitive. Separate terms with spaces; all terms must match.
 |------|---------|
 | `word` | Method, path, status code, or source/destination name or IP |
 | `src:api`, `dst:gateway` | Source / destination container name or IP (substring) |
-| `method:post`, `path:/users` | Method / path (substring) |
+| `method:post`, `path:/users` | Method / path (substring). For PostgreSQL the method is the statement verb and the path is the SQL |
+| `proto:http`, `proto:pg` | Protocol (`postgres`, `postgresql` and `sql` also work) |
 | `status:404`, `status:5xx`, `status:>=400` | Exact status, status class, or comparison (`<`, `<=`, `>`, `>=`) |
 | `>500ms`, `<2s`, `>=1.5s` | Response time |
 | `!term`, `-term` | Negates any term above |
@@ -123,6 +124,8 @@ Examples:
 status:5xx dst:api         server errors from the api container
 >500ms -path:/health       slow requests, ignoring health checks
 method:post !status:2xx    failed POSTs
+proto:pg >100ms            slow SQL queries
+proto:pg status:5xx        failed SQL statements
 ```
 
 Exchanges still waiting for a response never match `status:` or duration terms.

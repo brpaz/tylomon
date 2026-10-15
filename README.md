@@ -29,6 +29,7 @@ tylomon captures packets on Docker bridge network interfaces, reassembles TCP st
 - Container name resolution (shows container names instead of IPs)
 - Full HTTP header and body inspection
 - Detail pane with a pinned summary, syntax-coloured JSON bodies and hex dumps for binary data
+- PostgreSQL queries decoded from the wire protocol: SQL, parameters, rows, command tags and errors (`proto:pg`)
 - Chunked transfer-encoding decoding and gzip / deflate / brotli body decoding
 - Keep-alive connection support
 - Structured filters (`status:5xx`, `dst:api`, `>500ms`, negation) and sort by response time
@@ -119,6 +120,10 @@ tylomon --read session.pcap          # no root or Docker needed
 tylomon --no-tui --project my-compose-project | jq 'select(.status >= 500)'
 tylomon --project my-compose-project --har session.har
 ```
+
+### PostgreSQL
+
+Queries between containers and a PostgreSQL server appear in the same list as HTTP exchanges, with the SQL, its parameters, the command tag, a preview of the returned rows and any error. Use `proto:pg` to show only queries and `status:5xx` to find failed ones. The example stack in `examples/` includes a database and a client.
 
 ### Run via Docker
 
@@ -226,6 +231,7 @@ src/
     packet.rs       Ethernet/IP/TCP packet parsing (etherparse)
     stream.rs       TCP stream reassembly
     pipeline.rs     Capture and replay threads, HTTP extraction, pcap recording
+    postgres.rs     PostgreSQL wire protocol decoder
   docker/
     compose.rs      Compose file / COMPOSE_FILE project detection
     discovery.rs    Network discovery and target resolution (bollard)
@@ -256,7 +262,7 @@ scripts/
 
 ## Limitations
 
-- **Plaintext HTTP/1.x only** -- TLS/HTTPS and HTTP/2 traffic between containers is not decoded
+- **Plaintext only** -- decodes HTTP/1.x and PostgreSQL. TLS/HTTPS, HTTP/2 (including gRPC) and TLS-encrypted PostgreSQL connections are not decoded, and PostgreSQL connections must be captured from their start
 - **Linux only** -- relies on Docker bridge network interfaces
 - **Requires elevated privileges** -- needs `CAP_NET_RAW` and `CAP_NET_ADMIN` for live capture (replaying a pcap does not)
 

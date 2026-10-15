@@ -61,12 +61,16 @@ tylomon captures packets on Docker bridge network interfaces, reassembles TCP st
 sudo apt-get install libpcap-dev   # Debian/Ubuntu
 sudo dnf install libpcap-devel     # Fedora/RHEL
 
-# Build
-cargo build --release
+# Build, install to ~/.local/bin and grant capture capabilities
+task install
 
-# Install
+# Or by hand
+cargo build --release
 sudo cp target/release/tylomon /usr/local/bin/
+sudo setcap cap_net_raw,cap_net_admin=eip /usr/local/bin/tylomon
 ```
+
+`task install` installs to `~/.local/bin` by default (make sure it is on your `PATH`); pass `INSTALL_DIR=/usr/local/bin` to choose another directory. It uses `sudo` only when the directory is not writable and for `setcap`; pass `SETCAP=false` to skip the capabilities.
 
 #### Docker
 
@@ -187,6 +191,7 @@ task lint         # Run fmt check + clippy
 task test         # Run tests
 task build        # Build debug binary
 task build:release # Build release binary
+task install      # Build release, install it and grant capabilities (INSTALL_DIR=, SETCAP=)
 task run -- --project myapp  # Build, grant capabilities, run
 task watch        # Watch and rebuild on changes
 task e2e          # Capture the examples/ stack and assert on the exchanges

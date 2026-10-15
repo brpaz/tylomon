@@ -45,6 +45,36 @@ tasks:
     cmds:
       - cargo build --release --locked
 
+  install:
+    desc: Build the release binary, install it and grant packet capture capabilities
+    deps: [build:release]
+    vars:
+      INSTALL_DIR: '{{.INSTALL_DIR | default (printf "%s/.local/bin" (env "HOME"))}}'
+      SETCAP: '{{.SETCAP | default "true"}}'
+    cmds:
+      - |
+        set -e
+        dir="{{.INSTALL_DIR}}"
+        bin="$dir/{{.BINARY_NAME}}"
+        if mkdir -p "$dir" 2>/dev/null && [ -w "$dir" ]; then sudo_cmd=""; else sudo_cmd="sudo"; fi
+        $sudo_cmd install -Dm755 target/release/{{.BINARY_NAME}} "$bin"
+        echo "Installed $bin"
+        if [ "{{.SETCAP}}" = "true" ]; then
+          sudo setcap cap_net_raw,cap_net_admin=eip "$bin"
+          echo "Granted CAP_NET_RAW and CAP_NET_ADMIN: no sudo needed to run it"
+        fi
+        case ":$PATH:" in *":$dir:"*) ;; *) echo "Note: $dir is not on your PATH" ;; esac
+
+  uninstall:
+    desc: Remove the installed binary
+    vars:
+      INSTALL_DIR: '{{.INSTALL_DIR | default (printf "%s/.local/bin" (env "HOME"))}}'
+    cmds:
+      - |
+        bin="{{.INSTALL_DIR}}/{{.BINARY_NAME}}"
+        if [ -w "$(dirname "$bin")" ]; then rm -f "$bin"; else sudo rm -f "$bin"; fi
+        echo "Removed $bin"
+
   setcap:
     desc: Build the debug binary and grant it packet capture capabilities
     deps: [build]

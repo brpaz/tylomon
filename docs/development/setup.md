@@ -27,6 +27,8 @@ task lint           # Run fmt check + clippy
 task test           # Run tests (via nextest)
 task build          # Build debug binary
 task build:release  # Build release binary
+task install        # Build release, install to ~/.local/bin and grant capabilities
+task uninstall      # Remove the installed binary
 task setcap         # Build, then grant packet capture capabilities to the debug binary
 task run -- --project myapp  # Same, then run with args (no sudo needed at runtime)
 task e2e            # Capture the examples/ stack and assert on the exchanges

@@ -30,11 +30,31 @@
 
 ### Build and install
 
+With [Task](https://taskfile.dev/):
+
+```bash
+git clone https://github.com/brpaz/tylomon.git
+cd tylomon
+task install
+```
+
+This builds the release binary, installs it to `~/.local/bin` and grants the [packet capture capabilities](#packet-capture-permissions). Make sure that directory is on your `PATH`. Options:
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `INSTALL_DIR` | `~/.local/bin` | Install somewhere else, e.g. `task install INSTALL_DIR=/usr/local/bin` |
+| `SETCAP` | `true` | `task install SETCAP=false` skips granting the capabilities |
+
+`sudo` is used only when the install directory is not writable and for `setcap`. `task uninstall` removes the binary.
+
+Without Task:
+
 ```bash
 git clone https://github.com/brpaz/tylomon.git
 cd tylomon
 cargo build --release
 sudo cp target/release/tylomon /usr/local/bin/
+sudo setcap cap_net_raw,cap_net_admin=eip /usr/local/bin/tylomon
 ```
 
 ## Docker
@@ -61,4 +81,4 @@ Capturing needs `CAP_NET_RAW` and `CAP_NET_ADMIN`. Grant them to the binary inst
 sudo setcap cap_net_raw,cap_net_admin=eip /usr/local/bin/tylomon
 ```
 
-Re-run the command after every rebuild or upgrade. The user running tylomon also needs access to the Docker socket.
+Re-run the command after every rebuild or upgrade; `task install` does it for you. The user running tylomon also needs access to the Docker socket.

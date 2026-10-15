@@ -24,7 +24,7 @@ impl ContainerResolver {
 
     /// Refresh the IP-to-container mapping by querying Docker
     pub async fn refresh(&mut self, docker: &Docker, network_name: &str) -> Result<()> {
-        let network = docker.inspect_network::<String>(network_name, None).await?;
+        let network = docker.inspect_network(network_name, None).await?;
 
         self.mapping.clear();
 

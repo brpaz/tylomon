@@ -14,16 +14,17 @@ pub struct NetworkInfo {
 /// Compose networks follow the naming convention: `<project>_<network>`.
 /// The default network is named `<project>_default`.
 pub async fn discover_project_networks(docker: &Docker, project: &str) -> Result<Vec<NetworkInfo>> {
-    use bollard::network::ListNetworksOptions;
+    use bollard::query_parameters::ListNetworksOptionsBuilder;
     use std::collections::HashMap;
 
-    let filters: HashMap<String, Vec<String>> = HashMap::from([(
-        "label".to_string(),
-        vec![format!("com.docker.compose.project={project}")],
-    )]);
+    let label = format!("com.docker.compose.project={project}");
+    let filters = HashMap::from([("label", vec![label.as_str()])]);
+    let options = ListNetworksOptionsBuilder::default()
+        .filters(&filters)
+        .build();
 
     let networks = docker
-        .list_networks(Some(ListNetworksOptions { filters }))
+        .list_networks(Some(options))
         .await
         .map_err(|e| anyhow!("Failed to list Docker networks: {e}"))?;
 
@@ -47,7 +48,7 @@ pub async fn discover_project_networks(docker: &Docker, project: &str) -> Result
 /// Discover a network by name directly (when --network flag is used)
 pub async fn discover_network_by_name(docker: &Docker, network_name: &str) -> Result<NetworkInfo> {
     let network = docker
-        .inspect_network::<String>(network_name, None)
+        .inspect_network(network_name, None)
         .await
         .map_err(|e| anyhow!("Failed to inspect network '{network_name}': {e}"))?;
 

@@ -215,3 +215,108 @@ fn replay_decodes_gzip_response_bodies() {
         .expect("response body");
     assert_eq!(body, br#"{"status":"healthy"}"#);
 }
+
+fn pg_message(kind: u8, payload: &[u8]) -> Vec<u8> {
+    let mut message = vec![kind];
+    message.extend((payload.len() as u32 + 4).to_be_bytes());
+    message.extend(payload);
+    message
+}
+
+fn pg_cstr(text: &str) -> Vec<u8> {
+    let mut bytes = text.as_bytes().to_vec();
+    bytes.push(0);
+    bytes
+}
+
+#[test]
+fn replay_decodes_a_postgres_session() {
+    let mut ssl_request = 8u32.to_be_bytes().to_vec();
+    ssl_request.extend(80_877_103u32.to_be_bytes());
+
+    let mut startup_body = 196_608u32.to_be_bytes().to_vec();
+    for text in ["user", "app", "database", "shop", ""] {
+        startup_body.extend(if text.is_empty() {
+            vec![0]
+        } else {
+            pg_cstr(text)
+        });
+    }
+    let mut startup = (startup_body.len() as u32 + 4).to_be_bytes().to_vec();
+    startup.extend(startup_body);
+
+    let mut row_description = 1i16.to_be_bytes().to_vec();
+    row_description.extend(pg_cstr("name"));
+    row_description.extend([0; 4]);
+    row_description.extend([0; 2]);
+    row_description.extend(25i32.to_be_bytes());
+    row_description.extend((-1i16).to_be_bytes());
+    row_description.extend((-1i32).to_be_bytes());
+    row_description.extend([0; 2]);
+
+    let mut data_row = 1i16.to_be_bytes().to_vec();
+    data_row.extend(3i32.to_be_bytes());
+    data_row.extend(b"ana");
+
+    let path = temp_pcap("postgres");
+    let mut w = PcapWriter::create(&path);
+    let client = (CLIENT, 40010);
+    let server = (SERVER, 5432);
+
+    w.segment(1_000_000, client, server, 1, false, &ssl_request);
+    w.segment(1_001_000, server, client, 1, false, b"N");
+    w.segment(1_002_000, client, server, 9, false, &startup);
+    w.segment(
+        1_030_000,
+        server,
+        client,
+        2,
+        false,
+        &[
+            pg_message(b'R', &0i32.to_be_bytes()),
+            pg_message(b'Z', b"I"),
+        ]
+        .concat(),
+    );
+    w.segment(
+        2_000_000,
+        client,
+        server,
+        100,
+        false,
+        &pg_message(b'Q', &pg_cstr("SELECT name FROM users")),
+    );
+    w.segment(
+        2_007_000,
+        server,
+        client,
+        50,
+        false,
+        &[
+            pg_message(b'T', &row_description),
+            pg_message(b'D', &data_row),
+            pg_message(b'C', &pg_cstr("SELECT 1")),
+            pg_message(b'Z', b"I"),
+        ]
+        .concat(),
+    );
+    w.finish();
+
+    let exchanges = replay(&path);
+    let _ = std::fs::remove_file(&path);
+
+    assert_eq!(exchanges.len(), 2);
+    assert_eq!(exchanges[0].request.method, "CONNECT");
+    assert_eq!(exchanges[0].request.path, "app@shop");
+
+    let query = &exchanges[1];
+    assert_eq!(query.protocol, tylomon::http::types::Protocol::Postgres);
+    assert_eq!(query.request.method, "SELECT");
+    assert_eq!(query.request.path, "SELECT name FROM users");
+    assert_eq!(query.dst_port, 5432);
+    assert_eq!(query.duration_ms, Some(7));
+    let response = query.response.as_ref().expect("response");
+    assert_eq!(response.reason, "SELECT 1");
+    let table = String::from_utf8(response.body.clone().expect("body")).expect("utf8");
+    assert!(table.contains("ana"));
+}

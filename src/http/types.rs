@@ -1,11 +1,34 @@
 use serde::{Deserialize, Serialize};
 
-/// A complete HTTP exchange (request + response pair)
+/// Wire protocol an exchange was decoded from.
+///
+/// Non-HTTP protocols reuse the HTTP structures: the method is the verb, the path the
+/// operation, and the status code is 200 on success and 500 on failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Protocol {
+    #[default]
+    Http,
+    Postgres,
+}
+
+impl Protocol {
+    pub fn label(self) -> &'static str {
+        match self {
+            Protocol::Http => "http",
+            Protocol::Postgres => "postgres",
+        }
+    }
+}
+
+/// A complete request/response exchange
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpExchange {
     /// Unique per stored exchange, assigned by the app so selection survives reordering.
     #[serde(skip)]
     pub id: u64,
+    #[serde(default)]
+    pub protocol: Protocol,
     pub request: HttpRequest,
     pub response: Option<HttpResponse>,
     pub src_ip: String,

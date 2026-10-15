@@ -1,0 +1,66 @@
+[project]
+site_name = "tylomon"
+site_description = "Monitor HTTP traffic between Docker containers"
+site_author = "Bruno Paz"
+site_url = "https://brpaz.github.io/tylomon/"
+repo_url = "https://github.com/brpaz/tylomon"
+repo_name = "brpaz/tylomon"
+edit_uri = "edit/main/docs/"
+
+nav = [
+  { "Home" = "index.md" },
+  { "Getting Started" = [
+    { "Installation" = "getting-started/installation.md" },
+    { "Usage" = "getting-started/usage.md" },
+  ] },
+  { "Reference" = [
+    { "Architecture" = "reference/architecture.md" },
+    { "CLI Options" = "reference/cli.md" },
+    { "Keyboard Shortcuts" = "reference/keybindings.md" },
+  ] },
+  { "Development" = [
+    { "Setup" = "development/setup.md" },
+    { "Contributing" = "development/contributing.md" },
+  ] },
+]
+
+[project.theme]
+language = "en"
+logo = "assets/logo.webp"
+favicon = "assets/logo.webp"
+features = [
+  "content.code.copy",
+  "content.code.select",
+  "content.action.edit",
+  "navigation.footer",
+  "navigation.instant",
+  "navigation.instant.prefetch",
+  "navigation.sections",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "indigo"
+accent = "cyan"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "indigo"
+accent = "cyan"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions]
+admonition = {}
+attr_list = {}
+toc.permalink = true
+pymdownx.highlight.anchor_linenums = true
+pymdownx.superfences = {}
+pymdownx.tabbed.alternate_style = true

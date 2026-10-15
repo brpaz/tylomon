@@ -93,12 +93,12 @@ tasks:
   docs:serve:
     desc: Serve documentation locally
     cmds:
-      - mkdocs serve
+      - uv run --no-project --with-requirements requirements-docs.txt zensical serve
 
   docs:build:
     desc: Build documentation site
     cmds:
-      - mkdocs build --strict
+      - uv run --no-project --with-requirements requirements-docs.txt zensical build --clean --strict
 
   example:up:
     desc: Start example Docker Compose services

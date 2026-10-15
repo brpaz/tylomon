@@ -29,6 +29,12 @@ tasks:
     cmds:
       - cargo nextest run
 
+  e2e:
+    desc: Capture the examples/ stack and assert on the exchanges (needs Docker, jq, sudo)
+    deps: [build]
+    cmds:
+      - scripts/e2e.sh target/debug/{{.BINARY_NAME}}
+
   build:
     desc: Build debug binary
     cmds:
@@ -39,10 +45,17 @@ tasks:
     cmds:
       - cargo build --release --locked
 
-  run:
-    desc: Run in development mode
+  setcap:
+    desc: Build the debug binary and grant it packet capture capabilities
+    deps: [build]
     cmds:
-      - cargo run -- {{.CLI_ARGS}}
+      - sudo setcap cap_net_raw,cap_net_admin=eip target/debug/{{.BINARY_NAME}}
+
+  run:
+    desc: Run in development mode (grants capture capabilities, no root needed at runtime)
+    cmds:
+      - task: setcap
+      - ./target/debug/{{.BINARY_NAME}} {{.CLI_ARGS}}
 
   watch:
     desc: Watch and rebuild on changes

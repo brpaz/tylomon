@@ -10,6 +10,7 @@ pub enum Protocol {
     #[default]
     Http,
     Postgres,
+    Grpc,
 }
 
 impl Protocol {
@@ -17,6 +18,7 @@ impl Protocol {
         match self {
             Protocol::Http => "http",
             Protocol::Postgres => "postgres",
+            Protocol::Grpc => "grpc",
         }
     }
 }

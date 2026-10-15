@@ -54,6 +54,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect, focused: bool) {
                 (None, _) => "...".to_string(),
                 (Some(r), Protocol::Postgres) if r.status_code < 400 => "OK".to_string(),
                 (Some(_), Protocol::Postgres) => "ERR".to_string(),
+                (Some(r), Protocol::Grpc) => r.reason.clone(),
                 (Some(r), Protocol::Http) => r.status_code.to_string(),
             };
 

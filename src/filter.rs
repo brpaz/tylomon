@@ -9,7 +9,8 @@ use crate::http::types::{HttpExchange, Protocol};
 /// - `src:api`, `dst:gateway`: substring of the container name or IP
 /// - `method:post`, `path:/users`: substring match
 /// - `status:404`, `status:5xx`, `status:>=400`: exact, class or comparison
-/// - `proto:http`, `proto:pg`: protocol (`postgres`, `postgresql` and `sql` also work)
+/// - `proto:http`, `proto:pg`, `proto:grpc`: protocol (`postgres`, `postgresql` and `sql`
+///   also work)
 /// - `>500ms`, `<2s`, `>=1s`: response time comparison
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Filter {
@@ -139,6 +140,7 @@ impl Term {
                     let protocol = match lower.as_str() {
                         "http" => Some(Protocol::Http),
                         "postgres" | "postgresql" | "pg" | "sql" => Some(Protocol::Postgres),
+                        "grpc" => Some(Protocol::Grpc),
                         _ => None,
                     };
                     if let Some(protocol) = protocol {

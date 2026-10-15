@@ -120,6 +120,7 @@ impl Theme {
     pub fn method(method: &str) -> Style {
         match method {
             "GET" | "SELECT" => Self::method_get(),
+            "gRPC" => Style::default().fg(Color::Magenta),
             "POST" | "INSERT" | "UPDATE" | "MERGE" => Self::method_post(),
             "PUT" | "PATCH" | "CREATE" | "ALTER" => Self::method_put(),
             "DELETE" | "DROP" | "TRUNCATE" => Self::method_delete(),

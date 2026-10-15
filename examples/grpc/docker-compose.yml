@@ -1,0 +1,38 @@
+# Optional example for gRPC: a gRPC test server and a client calling it every 3 seconds.
+#
+# Start the services:
+#   cd examples/grpc && docker compose up -d
+#
+# Monitor with tylomon (pick the project from the list):
+#   cd examples/grpc && tylomon
+#
+# Or directly:
+#   tylomon --project tylomon-grpc
+#
+# You should see gRPC calls such as /grpcbin.GRPCBin/DummyUnary with their decoded protobuf
+# messages, and /grpcbin.GRPCBin/SpecificError failing with NOT_FOUND (try the filter
+# `proto:grpc`). grpcurl also asks the server for its schema through gRPC reflection, which
+# shows up as ServerReflectionInfo calls.
+
+name: tylomon-grpc
+
+services:
+  grpcbin:
+    image: moul/grpcbin:latest
+
+  client:
+    image: fullstorydev/grpcurl:v1.9.3-alpine
+    depends_on:
+      - grpcbin
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        sleep 2
+        while true; do
+          grpcurl -plaintext -d '{"f_string":"dummy","f_bytes":"AQID","f_float":1.5}' \
+            grpcbin:9000 grpcbin.GRPCBin/DummyUnary
+          grpcurl -plaintext -d '{"code":5,"reason":"nope"}' \
+            grpcbin:9000 grpcbin.GRPCBin/SpecificError
+          sleep 3
+        done

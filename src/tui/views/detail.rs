@@ -164,7 +164,7 @@ fn summary_lines(app: &App, ex: &HttpExchange, width: usize) -> Vec<Line<'static
     // Outcome: status badge, timing and body sizes.
     let status = ex.response.as_ref().map(|r| r.status_code);
     let badge = match (&ex.response, ex.protocol) {
-        (Some(r), Protocol::Postgres) => format!(" {} ", r.reason),
+        (Some(r), Protocol::Postgres | Protocol::Grpc) => format!(" {} ", r.reason),
         (Some(r), Protocol::Http) => format!(" {} {} ", r.status_code, r.reason),
         (None, _) => " NO RESPONSE ".to_string(),
     };
@@ -190,6 +190,11 @@ fn summary_lines(app: &App, ex: &HttpExchange, width: usize) -> Vec<Line<'static
             .as_ref()
             .and_then(|r| header_value(&r.headers, "rows"))
             .map_or(String::new(), |rows| format!("  {rows} rows")),
+        Protocol::Grpc => ex
+            .response
+            .as_ref()
+            .and_then(|r| header_value(&r.headers, "grpc-message"))
+            .map_or(String::new(), |message| format!("  {message}")),
     };
     outcome.push(Span::styled(detail, Theme::dim()));
     lines.push(Line::from(outcome));
@@ -292,6 +297,12 @@ fn labels(protocol: Protocol) -> Labels {
             request_body: "Request Body",
             response_headers: "Response Headers",
             response_body: "Response Body",
+        },
+        Protocol::Grpc => Labels {
+            request_headers: "Request Headers",
+            request_body: "Request Message",
+            response_headers: "Response Headers",
+            response_body: "Response Message",
         },
         Protocol::Postgres => Labels {
             request_headers: "Query Info",

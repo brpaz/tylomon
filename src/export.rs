@@ -272,6 +272,9 @@ fn shell_quote_bytes(bytes: &[u8]) -> String {
 /// Build a `curl` command that repeats the request.
 pub fn curl_command(ex: &HttpExchange) -> String {
     let mut parts = vec!["curl".to_string()];
+    if ex.request.version == "HTTP/2" {
+        parts.push("--http2-prior-knowledge".to_string());
+    }
     match ex.request.method.as_str() {
         "GET" => {}
         "HEAD" => parts.push("--head".to_string()),

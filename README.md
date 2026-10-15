@@ -4,12 +4,19 @@
   
 ![project logo](./docs/assets/logo.webp)
 
+![CI](https://img.shields.io/github/actions/workflow/status/brpaz/tylomon/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)
+![License](https://img.shields.io/github/license/brpaz/tylomon?style=for-the-badge)
+![Rust](https://img.shields.io/badge/Rust-2024_edition-orange?style=for-the-badge&logo=rust&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
+[![Docs](https://img.shields.io/badge/docs-brpaz.github.io-blue?style=for-the-badge&logo=markdown&logoColor=white)](https://brpaz.github.io/tylomon)
+![Vibe coded with Sonnet 5.5](https://img.shields.io/badge/Vibe_coded_with-Sonnet_5.5-D97757?style=for-the-badge&logo=anthropic&logoColor=white)
+
 </div>
 
 > Monitor HTTP traffic between Docker containers in real time, directly from the terminal.
 
-> [!WARNING]  
-> This project was fully Vibecoded by Opus 4.6. It was done as a way to experiment with AI workflows and to solve a specific itch of mine. Use it at your own risk!
+> [!WARNING]
+> **AI disclosure.** tylomon is vibe coded: the code, tests and documentation were written by AI coding assistants under human direction. The first version was written with Claude Opus 4.6; later work, including most features, was done with Claude Sonnet 5.5 in Claude Code. It was built to experiment with AI workflows and to solve a specific itch. There are automated tests and an end-to-end check against a sample Docker stack, but no independent code review or security audit. tylomon captures network traffic and needs elevated capabilities (`CAP_NET_RAW`, `CAP_NET_ADMIN`), so read the code before running it on a machine or network you care about. Use it at your own risk.
 
 ## About
 
@@ -18,14 +25,17 @@ tylomon captures packets on Docker bridge network interfaces, reassembles TCP st
 ## Features
 
 - Real-time HTTP traffic capture on Docker bridge networks
-- Automatic Docker Compose project and network discovery
+- Automatic Docker Compose project and network discovery; captures follow networks that are recreated or added while running
 - Container name resolution (shows container names instead of IPs)
 - Full HTTP header and body inspection
-- JSON body pretty-printing
-- Chunked transfer-encoding decoding
+- Detail pane with a pinned summary, syntax-coloured JSON bodies and hex dumps for binary data
+- Chunked transfer-encoding decoding and gzip / deflate / brotli body decoding
 - Keep-alive connection support
-- Search and filter by method, path, or status code
-- Keyboard-driven TUI with split-pane navigation
+- Structured filters (`status:5xx`, `dst:api`, `>500ms`, negation) and sort by response time
+- Record traffic to pcap (`--write`) and replay it later without root or Docker (`--read`)
+- JSON Lines streaming (`--no-tui`) and HAR export (`--har`, or `e` in the TUI)
+- Service map (`m`): requests, errors and p50/p95 latency per source→destination
+- Keyboard and mouse driven TUI: click or double-click to select and open, wheel to scroll, drag to select and copy text in the detail pane
 
 ## Getting Started
 
@@ -34,7 +44,13 @@ tylomon captures packets on Docker bridge network interfaces, reassembles TCP st
 - Linux (uses bridge interface capture via libpcap)
 - Docker daemon running
 - `libpcap` installed
-- Root or `CAP_NET_RAW` + `CAP_NET_ADMIN` capabilities
+- Root or `CAP_NET_RAW` + `CAP_NET_ADMIN` capabilities. Prefer granting the capabilities over `sudo`, which can hide your Wayland/X11 session (clipboard) and Compose environment:
+
+  ```bash
+  sudo setcap cap_net_raw,cap_net_admin=eip /usr/local/bin/tylomon
+  ```
+
+  Re-run `setcap` after every rebuild. When developing, `task run` does it for you.
 
 ### Installation
 
@@ -45,12 +61,16 @@ tylomon captures packets on Docker bridge network interfaces, reassembles TCP st
 sudo apt-get install libpcap-dev   # Debian/Ubuntu
 sudo dnf install libpcap-devel     # Fedora/RHEL
 
-# Build
-cargo build --release
+# Build, install to ~/.local/bin and grant capture capabilities
+task install
 
-# Install
+# Or by hand
+cargo build --release
 sudo cp target/release/tylomon /usr/local/bin/
+sudo setcap cap_net_raw,cap_net_admin=eip /usr/local/bin/tylomon
 ```
+
+`task install` installs to `~/.local/bin` by default (make sure it is on your `PATH`); pass `INSTALL_DIR=/usr/local/bin` to choose another directory. It uses `sudo` only when the directory is not writable and for `setcap`; pass `SETCAP=false` to skip the capabilities.
 
 #### Docker
 
@@ -59,6 +79,20 @@ docker pull ghcr.io/brpaz/tylomon:latest
 ```
 
 ## Usage
+
+### Pick a target interactively
+
+```bash
+cd my-project && sudo tylomon
+```
+
+Without `--project` or `--network`, tylomon lists the Compose project found in the current directory (`compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml`, or the files in `COMPOSE_FILE`) plus every Docker bridge network that has containers. Use `j`/`k` and `Enter` to select, `/` to filter. The last choice is preselected next time. Selecting a Compose project captures on all of its networks.
+
+A sample project to try it out lives in [`examples/`](examples/):
+
+```bash
+cd examples && docker compose up -d && sudo tylomon
+```
 
 ### Monitor a Docker Compose project
 
@@ -70,6 +104,20 @@ sudo tylomon --project my-compose-project
 
 ```bash
 sudo tylomon --network my-network-name
+```
+
+### Record and replay
+
+```bash
+sudo tylomon --project my-compose-project --write session.pcap
+tylomon --read session.pcap          # no root or Docker needed
+```
+
+### Scripting and export
+
+```bash
+tylomon --no-tui --project my-compose-project | jq 'select(.status >= 500)'
+tylomon --project my-compose-project --har session.har
 ```
 
 ### Run via Docker
@@ -90,26 +138,38 @@ Usage: tylomon [OPTIONS]
 Options:
   -p, --project <PROJECT>              Docker compose project name to monitor
   -n, --network <NETWORK>              Docker network name to capture on
+  -w, --write <FILE>                   Record captured packets to a pcap file
+  -r, --read <FILE>                    Replay a pcap file instead of capturing live
+      --no-tui                         Write exchanges to stdout as JSON Lines instead of showing the TUI
+      --har <FILE>                     Save all captured exchanges to a HAR file on exit
       --log-file <LOG_FILE>            Log file path [default: tylomon.log]
       --max-exchanges <MAX_EXCHANGES>  Maximum exchanges to keep in memory [default: 1000]
   -h, --help                           Print help
   -V, --version                        Print version
 ```
 
-## Keyboard shortcuts
+## Keyboard and mouse
 
-| Key       | Action                                        |
-|-----------|-----------------------------------------------|
-| `j` / `k` | Navigate exchange list (or scroll detail pane) |
-| `Tab`     | Switch focus between list and detail panes    |
-| `/`       | Open search filter                            |
-| `Enter`   | Apply filter (in filter mode)                 |
-| `Esc`     | Cancel filter / clear active filter           |
-| `q`       | Clear active filter, or quit                  |
-| `c`       | Clear all exchanges                           |
-| `g` / `G` | Jump to first / last exchange                 |
-| `PgUp/Dn` | Page through list or detail                  |
-| `Ctrl+C`  | Quit                                          |
+Press `?` in the app for the full list. The essentials:
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Select next / previous exchange (scrolls the detail pane when it has focus) |
+| `Tab` | Switch focus between list and detail |
+| `/` | Filter (`status:5xx dst:api >500ms -path:/health`) |
+| `s` | Sort by capture order / slowest first |
+| `m` | Service map |
+| `z` | Zoom the focused pane full screen |
+| `f` | Follow the newest exchange |
+| `p` | Pause / resume |
+| `y` / `1` / `2` / `3` | Copy exchange / request / response / `curl` command |
+| `e` | Export the listed exchanges to a HAR file |
+| `?` | Help |
+| `q` / `Esc` | Clear selection, zoom or filter, then quit |
+
+With the mouse: click to select, double-click to open, wheel to scroll, drag in the detail pane to select and copy text, drag the border between the panes to resize them.
+
+See the [keybindings reference](https://brpaz.github.io/tylomon/reference/keybindings/) for everything.
 
 ## Development
 
@@ -131,10 +191,13 @@ task lint         # Run fmt check + clippy
 task test         # Run tests
 task build        # Build debug binary
 task build:release # Build release binary
-task run -- --project myapp  # Run in dev mode
+task install      # Build release, install it and grant capabilities (INSTALL_DIR=, SETCAP=)
+task run -- --project myapp  # Build, grant capabilities, run
 task watch        # Watch and rebuild on changes
+task e2e          # Capture the examples/ stack and assert on the exchanges
 task ci           # Run full CI pipeline locally
 task docker:build # Build Docker image locally
+task docs:serve   # Preview the documentation (Zensical)
 ```
 
 ### Git hooks
@@ -150,40 +213,52 @@ Hooks are installed automatically when entering the devenv shell.
 
 ```
 src/
-  main.rs           Entry point, event loop
-  app.rs            Application state, keyboard handling, filtering
+  main.rs           Entry point, event loop, headless JSONL mode
+  app.rs            Application state, keyboard and mouse handling
   cli.rs            CLI argument parsing (clap)
+  export.rs         JSONL, HAR and curl serialisation
+  filter.rs         Exchange filter query parsing and matching
+  stats.rs          Per-edge traffic aggregation (service map)
+  state.rs          Remembered picker choice
+  error.rs          Error types
   capture/
-    bridge.rs       Docker bridge interface discovery
+    bridge.rs       Docker network ID to bridge interface name
     packet.rs       Ethernet/IP/TCP packet parsing (etherparse)
     stream.rs       TCP stream reassembly
-    pipeline.rs     Capture thread, HTTP extraction, chunked decoding
+    pipeline.rs     Capture and replay threads, HTTP extraction, pcap recording
   docker/
-    discovery.rs    Docker network/container discovery (bollard)
+    compose.rs      Compose file / COMPOSE_FILE project detection
+    discovery.rs    Network discovery and target resolution (bollard)
     resolver.rs     Container IP-to-name resolution
     task.rs         Async resolver polling
+    watch.rs        Re-attaches captures when networks change
   http/
     parser.rs       HTTP request/response parsing (httparse)
+    encoding.rs     gzip / deflate / brotli body decoding
     types.rs        HttpExchange, HttpRequest, HttpResponse types
   tui/
     event.rs        Terminal input handling
-    theme.rs        Color scheme
-    views/          TUI panels (exchange list, detail, status bar)
+    picker.rs       Interactive target selection
+    rows.rs         Detail rows and text selection
+    theme.rs        Colour scheme
+    views/          Exchange list, detail, body rendering, service map, help, status bar
+scripts/
+  e2e.sh            End-to-end check against examples/
 ```
 
 ## How it works
 
-1. Discovers the Docker bridge network interface for the target compose project or network name
-2. Opens a pcap capture on that bridge interface filtering TCP traffic
-3. Reassembles TCP streams and parses HTTP request/response pairs
+1. Resolves the target (a flag, the picker, or the Compose files in the current directory) to Docker networks and their bridge interfaces
+2. Opens one pcap capture per bridge, filtering TCP, and keeps them in sync when networks are removed, recreated or added. With `--read`, replays a pcap file instead
+3. Reassembles TCP streams and parses HTTP request/response pairs, decoding chunked and compressed bodies. Timing comes from packet timestamps
 4. Resolves container IPs to names via the Docker API
-5. Displays everything in a Ratatui terminal dashboard at 30fps
+5. Shows everything in a Ratatui dashboard at 30fps, or streams it as JSON Lines, or exports a HAR file
 
 ## Limitations
 
-- **Plaintext HTTP only** -- TLS/HTTPS traffic between containers is not intercepted
+- **Plaintext HTTP/1.x only** -- TLS/HTTPS and HTTP/2 traffic between containers is not decoded
 - **Linux only** -- relies on Docker bridge network interfaces
-- **Requires elevated privileges** -- needs `CAP_NET_RAW` and `CAP_NET_ADMIN` for packet capture
+- **Requires elevated privileges** -- needs `CAP_NET_RAW` and `CAP_NET_ADMIN` for live capture (replaying a pcap does not)
 
 ## Documentation
 

@@ -2,19 +2,22 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState};
+use ratatui::widgets::{Block, Borders, List, ListItem};
 
-use crate::app::App;
+use crate::app::{App, SortMode};
 use crate::tui::theme::Theme;
 
-pub fn render(frame: &mut Frame, app: &App, area: Rect, focused: bool) {
+pub fn render(frame: &mut Frame, app: &mut App, area: Rect, focused: bool) {
     let border_style = if focused {
         Theme::title()
     } else {
         Style::default()
     };
     let block = Block::default()
-        .title(" Exchanges ")
+        .title(match app.sort {
+            SortMode::Time => " Exchanges ".to_string(),
+            sort => format!(" Exchanges (sort: {}) ", sort.label()),
+        })
         .borders(Borders::ALL)
         .border_style(border_style);
 
@@ -58,6 +61,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, focused: bool) {
                 .map(|r| format!("{}", r.status_code))
                 .unwrap_or_else(|| "...".to_string());
 
+            let duration_style = Theme::duration(exchange.duration_ms);
             let duration_text = exchange
                 .duration_ms
                 .map(|d| format!(" {d}ms"))
@@ -76,10 +80,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, focused: bool) {
 
             let line = Line::from(vec![
                 Span::styled(format!("{:<7}", exchange.request.method), method_style),
-                Span::raw(&exchange.request.path),
+                Span::raw(exchange.request.path.clone()),
                 Span::raw(" "),
                 Span::styled(status_text, status_style),
-                Span::styled(duration_text, Theme::dim()),
+                Span::styled(duration_text, duration_style),
                 Span::styled(format!(" {src_name}\u{2192}{dst_name}"), Theme::dim()),
             ]);
 
@@ -87,12 +91,15 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, focused: bool) {
         })
         .collect();
 
-    let mut state = ListState::default();
-    state.select(app.selected_index);
+    // The state lives in the app so the scroll offset persists between frames and mouse clicks
+    // can be mapped to rows.
+    let mut state = std::mem::take(&mut app.list_state);
+    state.select(app.selected_row());
 
     let list = List::new(items)
         .block(block)
         .highlight_style(Theme::selected());
 
     frame.render_stateful_widget(list, area, &mut state);
+    app.list_state = state;
 }

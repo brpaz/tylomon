@@ -1,18 +1,19 @@
-use std::time::Instant;
-
 use serde::{Deserialize, Serialize};
 
 /// A complete HTTP exchange (request + response pair)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpExchange {
+    /// Unique per stored exchange, assigned by the app so selection survives reordering.
+    #[serde(skip)]
+    pub id: u64,
     pub request: HttpRequest,
     pub response: Option<HttpResponse>,
     pub src_ip: String,
     pub dst_ip: String,
     pub src_port: u16,
     pub dst_port: u16,
-    #[serde(skip)]
-    pub timestamp: Option<Instant>,
+    /// Request capture time in microseconds since the Unix epoch
+    pub timestamp_us: Option<u64>,
     /// Duration from request to response
     pub duration_ms: Option<u64>,
 }

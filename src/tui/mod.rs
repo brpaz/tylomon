@@ -1,4 +1,6 @@
 pub mod event;
+pub mod picker;
+pub mod rows;
 pub mod theme;
 pub mod views;
 

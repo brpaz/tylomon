@@ -16,8 +16,7 @@
     cargo-watch
     cargo-nextest
 
-    python3Packages.mkdocs
-    python3Packages.mkdocs-material
+    uv
   ];
 
   enterShell = ''

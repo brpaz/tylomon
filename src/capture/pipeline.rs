@@ -1,17 +1,28 @@
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
+use pcap::{Capture, Linktype, Packet, Savefile};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 use crate::app::Action;
 use crate::capture::packet::parse_packet;
 use crate::capture::stream::{FlowKey, StreamReassembler};
+use crate::export::now_micros;
+use crate::http::encoding::decode_body;
 use crate::http::parser::{get_content_length, is_chunked, parse_request, parse_response};
 use crate::http::types::{HttpExchange, HttpRequest};
 
-const PENDING_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const PENDING_REQUEST_TIMEOUT_US: u64 = 30_000_000;
 const STALE_SWEEP_INTERVAL: u64 = 500;
+/// Packets between flushes of a recording, bounding data lost if the process is killed.
+const RECORD_FLUSH_INTERVAL: u64 = 100;
+
+/// Capture timestamp in microseconds since the Unix epoch.
+type Micros = u64;
 
 struct PendingRequest {
     request: HttpRequest,
@@ -19,96 +30,288 @@ struct PendingRequest {
     dst_ip: String,
     src_port: u16,
     dst_port: u16,
-    timestamp: Instant,
+    timestamp_us: Micros,
+}
+
+/// Shared destination for packets recorded from every capture thread.
+#[derive(Clone)]
+pub struct Recorder {
+    file: Arc<Mutex<Savefile>>,
+}
+
+impl Recorder {
+    /// Create a pcap file at `path`. Bridge interfaces deliver Ethernet frames.
+    pub fn create(path: &Path) -> Result<Self, pcap::Error> {
+        let file = Capture::dead(Linktype::ETHERNET)?.savefile(path)?;
+        Ok(Self {
+            file: Arc::new(Mutex::new(file)),
+        })
+    }
+
+    fn write(&self, packet: &Packet<'_>, flush: bool) {
+        let Ok(mut file) = self.file.lock() else {
+            return;
+        };
+        file.write(packet);
+        if flush && let Err(e) = file.flush() {
+            warn!("Failed to flush recording: {e}");
+        }
+    }
+
+    fn flush(&self) {
+        if let Ok(mut file) = self.file.lock() {
+            let _ = file.flush();
+        }
+    }
+}
+
+fn packet_time(packet: &Packet<'_>) -> Micros {
+    packet.header.ts.tv_sec as u64 * 1_000_000 + packet.header.ts.tv_usec as u64
+}
+
+/// Turns raw packets into HTTP exchanges.
+struct Pipeline {
+    reassembler: StreamReassembler,
+    pending_requests: HashMap<FlowKey, PendingRequest>,
+    packet_count: u64,
+}
+
+impl Pipeline {
+    fn new() -> Self {
+        Self {
+            reassembler: StreamReassembler::new(),
+            pending_requests: HashMap::new(),
+            packet_count: 0,
+        }
+    }
+
+    fn handle_packet(&mut self, data: &[u8], now: Micros, action_tx: &mpsc::Sender<Action>) {
+        self.packet_count += 1;
+
+        if let Some(parsed) = parse_packet(data)
+            && let Some(stream_data) = self.reassembler.process_packet(&parsed)
+            && !parsed.payload.is_empty()
+        {
+            let consumed = process_stream_data(
+                &stream_data.flow,
+                &stream_data.data,
+                now,
+                &mut self.pending_requests,
+                action_tx,
+            );
+            if consumed > 0 {
+                self.reassembler.drain(&stream_data.flow, consumed);
+            }
+        }
+
+        if self.packet_count.is_multiple_of(STALE_SWEEP_INTERVAL) {
+            self.reassembler.cleanup_stale(1024);
+            self.sweep(now, action_tx);
+        }
+    }
+
+    /// Flush pending requests that have waited longer than the timeout as no-response
+    /// exchanges.
+    fn sweep(&mut self, now: Micros, action_tx: &mpsc::Sender<Action>) {
+        let stale_keys: Vec<FlowKey> = self
+            .pending_requests
+            .iter()
+            .filter(|(_, req)| now.saturating_sub(req.timestamp_us) > PENDING_REQUEST_TIMEOUT_US)
+            .map(|(key, _)| key.clone())
+            .collect();
+
+        for key in stale_keys {
+            if let Some(pending) = self.pending_requests.remove(&key) {
+                debug!("Flushing stale pending request as no-response exchange");
+                let _ = action_tx
+                    .blocking_send(Action::NewExchange(Box::new(unanswered_exchange(pending))));
+            }
+        }
+    }
+}
+
+fn unanswered_exchange(pending: PendingRequest) -> HttpExchange {
+    HttpExchange {
+        request: pending.request,
+        response: None,
+        src_ip: pending.src_ip,
+        dst_ip: pending.dst_ip,
+        src_port: pending.src_port,
+        dst_port: pending.dst_port,
+        id: 0,
+        timestamp_us: Some(pending.timestamp_us),
+        duration_ms: None,
+    }
+}
+
+/// Consecutive read errors after which a capture is considered dead (e.g. the interface
+/// was removed).
+/// Pause between reads while no packets are waiting.
+const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+const MAX_CONSECUTIVE_READ_ERRORS: u32 = 10;
+
+/// A running live capture thread.
+pub struct CaptureHandle {
+    stop: Arc<AtomicBool>,
+    /// Set when the capture could not start; retrying would fail the same way.
+    fatal: Arc<AtomicBool>,
+    thread: std::thread::JoinHandle<()>,
+}
+
+impl CaptureHandle {
+    /// True once the thread ended on its own (e.g. its interface vanished or was not up yet),
+    /// meaning a new capture on the same network could succeed.
+    pub fn needs_restart(&self) -> bool {
+        self.thread.is_finished() && !self.fatal.load(Ordering::Relaxed)
+    }
+
+    /// Ask the thread to stop and wait for it, which also closes any recording handle.
+    pub fn stop(self) {
+        self.stop.store(true, Ordering::Relaxed);
+        let _ = self.thread.join();
+    }
 }
 
 pub fn spawn_capture_task(
     bridge_interface: String,
     action_tx: mpsc::Sender<Action>,
-) -> std::thread::JoinHandle<()> {
-    std::thread::spawn(move || {
-        if let Err(e) = run_capture(&bridge_interface, &action_tx) {
-            error!("Capture task failed: {e}");
-            let msg = if e.to_string().contains("CAP_NET_RAW") {
-                format!(
-                    "Capture failed: permission denied. Run with sudo or grant capabilities:\n\
-                     sudo setcap cap_net_raw,cap_net_admin=eip {binary}",
-                    binary = std::env::current_exe()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_else(|_| "tylomon".to_string())
-                )
-            } else {
-                format!("Capture failed: {e}")
-            };
-            let _ = action_tx.blocking_send(Action::CaptureError(msg));
+    recorder: Option<Recorder>,
+) -> CaptureHandle {
+    let stop = Arc::new(AtomicBool::new(false));
+    let fatal = Arc::new(AtomicBool::new(false));
+    let thread = {
+        let (stop, fatal) = (stop.clone(), fatal.clone());
+        std::thread::spawn(move || {
+            if let Err(e) = run_capture(&bridge_interface, &action_tx, recorder.as_ref(), &stop) {
+                error!("Capture task failed: {e}");
+                let permission_denied = e.to_string().contains("CAP_NET_RAW");
+                // Missing privileges will not fix themselves; other failures (such as an
+                // interface that is not up yet) are retried by the network watcher.
+                fatal.store(permission_denied, Ordering::Relaxed);
+                let message = if permission_denied {
+                    format!(
+                        "Capture failed: permission denied. Run with sudo or grant capabilities:\n\
+                         sudo setcap cap_net_raw,cap_net_admin=eip {binary}",
+                        binary = std::env::current_exe()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_else(|_| "tylomon".to_string())
+                    )
+                } else {
+                    format!("Capture failed: {e}")
+                };
+                let _ = action_tx.blocking_send(Action::CaptureError {
+                    interface: bridge_interface,
+                    message,
+                });
+            }
+        })
+    };
+    CaptureHandle {
+        stop,
+        fatal,
+        thread,
+    }
+}
+
+/// Replay a pcap file through the pipeline as fast as it can be read. The file is opened
+/// before the thread starts so that a bad path is reported to the caller.
+pub fn spawn_replay_task(
+    path: &Path,
+    action_tx: mpsc::Sender<Action>,
+) -> Result<std::thread::JoinHandle<()>, pcap::Error> {
+    let capture = Capture::from_file(path)?;
+    Ok(std::thread::spawn(move || {
+        let count = replay(capture, &action_tx);
+        info!(packets = count, "Replay finished");
+    }))
+}
+
+fn replay(mut capture: Capture<pcap::Offline>, action_tx: &mpsc::Sender<Action>) -> u64 {
+    let mut pipeline = Pipeline::new();
+    let mut last_packet_time = 0;
+
+    loop {
+        match capture.next_packet() {
+            Ok(packet) => {
+                last_packet_time = packet_time(&packet);
+                pipeline.handle_packet(packet.data, last_packet_time, action_tx);
+            }
+            Err(pcap::Error::NoMorePackets) => break,
+            Err(e) => {
+                warn!("Packet read error: {e}");
+                break;
+            }
         }
-    })
+        if action_tx.is_closed() {
+            return pipeline.packet_count;
+        }
+    }
+
+    // Anything still unanswered at the end of the recording never got a response.
+    pipeline.sweep(
+        last_packet_time.saturating_add(PENDING_REQUEST_TIMEOUT_US + 1),
+        action_tx,
+    );
+    pipeline.packet_count
 }
 
 fn run_capture(
     bridge_interface: &str,
     action_tx: &mpsc::Sender<Action>,
+    recorder: Option<&Recorder>,
+    stop: &AtomicBool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut cap = pcap::Capture::from_device(bridge_interface)?
+    let mut cap = Capture::from_device(bridge_interface)?
         .promisc(true)
         .snaplen(65535)
         .timeout(100)
-        .open()?;
+        .open()?
+        // A blocking read on an idle interface may never time out, which would make the
+        // thread impossible to stop; poll instead.
+        .setnonblock()?;
 
     cap.filter("tcp", true)?;
 
     info!(interface = bridge_interface, "Capture started");
+    let _ = action_tx.blocking_send(Action::CaptureStarted(bridge_interface.to_string()));
 
-    let mut reassembler = StreamReassembler::new();
-    let mut pending_requests: HashMap<FlowKey, PendingRequest> = HashMap::new();
-    let mut packet_count: u64 = 0;
+    let mut pipeline = Pipeline::new();
+    let mut read_errors = 0;
 
     loop {
-        if action_tx.is_closed() {
+        if action_tx.is_closed() || stop.load(Ordering::Relaxed) {
             break;
         }
 
-        let packet_data = match cap.next_packet() {
-            Ok(packet) => packet.data.to_vec(),
+        match cap.next_packet() {
+            Ok(packet) => {
+                read_errors = 0;
+                if let Some(recorder) = recorder {
+                    let flush = (pipeline.packet_count + 1).is_multiple_of(RECORD_FLUSH_INTERVAL);
+                    recorder.write(&packet, flush);
+                }
+                pipeline.handle_packet(packet.data, packet_time(&packet), action_tx);
+            }
             Err(pcap::Error::TimeoutExpired) => {
-                sweep_stale_requests(&mut pending_requests, action_tx);
-                continue;
+                read_errors = 0;
+                if let Some(recorder) = recorder {
+                    recorder.flush();
+                }
+                pipeline.sweep(now_micros(), action_tx);
+                std::thread::sleep(IDLE_POLL_INTERVAL);
             }
             Err(e) => {
                 warn!("Packet read error: {e}");
-                continue;
+                read_errors += 1;
+                if read_errors >= MAX_CONSECUTIVE_READ_ERRORS {
+                    warn!(
+                        interface = bridge_interface,
+                        "Giving up on capture after repeated read errors"
+                    );
+                    break;
+                }
             }
-        };
-
-        packet_count += 1;
-
-        let Some(parsed) = parse_packet(&packet_data) else {
-            continue;
-        };
-
-        if parsed.payload.is_empty() {
-            reassembler.process_packet(&parsed);
-            continue;
-        }
-
-        let Some(stream_data) = reassembler.process_packet(&parsed) else {
-            continue;
-        };
-
-        let consumed = process_stream_data(
-            &stream_data.flow,
-            &stream_data.data,
-            &mut pending_requests,
-            action_tx,
-        );
-
-        if consumed > 0 {
-            reassembler.drain(&stream_data.flow, consumed);
-        }
-
-        if packet_count.is_multiple_of(STALE_SWEEP_INTERVAL) {
-            reassembler.cleanup_stale(1024);
-            sweep_stale_requests(&mut pending_requests, action_tx);
         }
     }
 
@@ -116,41 +319,11 @@ fn run_capture(
     Ok(())
 }
 
-/// Remove pending requests that have been waiting longer than the timeout,
-/// flushing them as no-response exchanges.
-fn sweep_stale_requests(
-    pending_requests: &mut HashMap<FlowKey, PendingRequest>,
-    action_tx: &mpsc::Sender<Action>,
-) {
-    let stale_keys: Vec<FlowKey> = pending_requests
-        .iter()
-        .filter(|(_, req)| req.timestamp.elapsed() > PENDING_REQUEST_TIMEOUT)
-        .map(|(key, _)| key.clone())
-        .collect();
-
-    for key in stale_keys {
-        if let Some(pending) = pending_requests.remove(&key) {
-            let exchange = HttpExchange {
-                request: pending.request,
-                response: None,
-                src_ip: pending.src_ip,
-                dst_ip: pending.dst_ip,
-                src_port: pending.src_port,
-                dst_port: pending.dst_port,
-                timestamp: Some(pending.timestamp),
-                duration_ms: None,
-            };
-
-            debug!("Flushing stale pending request as no-response exchange");
-            let _ = action_tx.blocking_send(Action::NewExchange(Box::new(exchange)));
-        }
-    }
-}
-
 /// Returns the total number of bytes consumed from the buffer.
 fn process_stream_data(
     flow: &FlowKey,
     data: &[u8],
+    now: Micros,
     pending_requests: &mut HashMap<FlowKey, PendingRequest>,
     action_tx: &mpsc::Sender<Action>,
 ) -> usize {
@@ -162,7 +335,7 @@ fn process_stream_data(
             break;
         }
 
-        let consumed = try_parse_message(flow, remaining, pending_requests, action_tx);
+        let consumed = try_parse_message(flow, remaining, now, pending_requests, action_tx);
         if consumed == 0 {
             break;
         }
@@ -177,6 +350,7 @@ fn process_stream_data(
 fn try_parse_message(
     flow: &FlowKey,
     data: &[u8],
+    now: Micros,
     pending_requests: &mut HashMap<FlowKey, PendingRequest>,
     action_tx: &mpsc::Sender<Action>,
 ) -> usize {
@@ -184,7 +358,7 @@ fn try_parse_message(
         let (body, body_len) = extract_body(data, header_len, &request.headers);
 
         let mut request = request;
-        request.body = body;
+        request.body = decode_if_encoded(&request.headers, body);
 
         let total_consumed = header_len + body_len;
 
@@ -194,7 +368,7 @@ fn try_parse_message(
             dst_ip: flow.dst_ip.to_string(),
             src_port: flow.src_port,
             dst_port: flow.dst_port,
-            timestamp: Instant::now(),
+            timestamp_us: now,
         };
 
         pending_requests.insert(flow.clone(), pending);
@@ -211,12 +385,12 @@ fn try_parse_message(
         let (body, body_len) = extract_body(data, header_len, &response.headers);
 
         let mut response = response;
-        response.body = body;
+        response.body = decode_if_encoded(&response.headers, body);
 
         let total_consumed = header_len + body_len;
 
         if let Some(pending) = pending_requests.remove(&reverse_flow) {
-            let duration_ms = Some(pending.timestamp.elapsed().as_millis() as u64);
+            let duration_ms = Some(now.saturating_sub(pending.timestamp_us) / 1000);
 
             let exchange = HttpExchange {
                 request: pending.request,
@@ -225,7 +399,8 @@ fn try_parse_message(
                 dst_ip: pending.dst_ip,
                 src_port: pending.src_port,
                 dst_port: pending.dst_port,
-                timestamp: Some(pending.timestamp),
+                id: 0,
+                timestamp_us: Some(pending.timestamp_us),
                 duration_ms,
             };
 
@@ -236,6 +411,11 @@ fn try_parse_message(
     }
 
     0
+}
+
+/// Replace a compressed body with its decoded content so every view shows readable text.
+fn decode_if_encoded(headers: &[(String, String)], body: Option<Vec<u8>>) -> Option<Vec<u8>> {
+    body.map(|raw| decode_body(headers, &raw).unwrap_or(raw))
 }
 
 /// Returns `(decoded_body, raw_bytes_consumed)`. For chunked encoding,

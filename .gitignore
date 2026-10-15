@@ -15,5 +15,5 @@ devenv.local.nix
 # pre-commit
 .pre-commit-config.yaml
 
-# mkdocs build output
+# documentation build output
 site/

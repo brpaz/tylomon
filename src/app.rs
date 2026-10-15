@@ -6,7 +6,7 @@ use ratatui::widgets::{ListState, TableState};
 
 use crate::export;
 use crate::filter::Filter;
-use crate::http::types::HttpExchange;
+use crate::http::types::{HttpExchange, Protocol};
 use crate::stats::{self, EdgeStats};
 use crate::tui::rows::{Pos, Row, Selection, selected_text, word_at};
 
@@ -833,9 +833,13 @@ impl App {
     /// Save the exchanges currently listed (after filtering) to a timestamped HAR file in the
     /// working directory.
     fn export_har(&mut self) {
-        let visible = self.filtered_exchanges();
+        let visible: Vec<_> = self
+            .filtered_exchanges()
+            .into_iter()
+            .filter(|(_, ex)| ex.protocol == Protocol::Http)
+            .collect();
         if visible.is_empty() {
-            self.flash("Nothing to export", 2);
+            self.flash("No HTTP exchanges to export", 2);
             return;
         }
         let stamp = export::iso8601(export::now_micros()).replace(':', "-");
@@ -859,6 +863,10 @@ impl App {
         let Some(exchange) = self.selected_exchange().cloned() else {
             return;
         };
+        if matches!(target, CopyTarget::Curl) && exchange.protocol != Protocol::Http {
+            self.flash("Copy as curl is only available for HTTP exchanges", 3);
+            return;
+        }
 
         let (text, label) = match target {
             CopyTarget::Full => (self.format_exchange_text(&exchange), "exchange"),
@@ -994,6 +1002,7 @@ mod tests {
             src_port: 1,
             dst_port: 80,
             id: 0,
+            protocol: Default::default(),
             timestamp_us: None,
             duration_ms: ms,
         }

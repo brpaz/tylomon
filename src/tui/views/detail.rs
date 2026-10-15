@@ -9,7 +9,7 @@ use ratatui::widgets::{
 use super::body::{body_lines, format_size};
 use crate::app::{App, DetailCache};
 use crate::export::iso8601;
-use crate::http::types::HttpExchange;
+use crate::http::types::{HttpExchange, Protocol};
 use crate::tui::rows::{Row, highlight_line};
 use crate::tui::theme::Theme;
 
@@ -163,9 +163,10 @@ fn summary_lines(app: &App, ex: &HttpExchange, width: usize) -> Vec<Line<'static
 
     // Outcome: status badge, timing and body sizes.
     let status = ex.response.as_ref().map(|r| r.status_code);
-    let badge = match &ex.response {
-        Some(r) => format!(" {} {} ", r.status_code, r.reason),
-        None => " NO RESPONSE ".to_string(),
+    let badge = match (&ex.response, ex.protocol) {
+        (Some(r), Protocol::Postgres) => format!(" {} ", r.reason),
+        (Some(r), Protocol::Http) => format!(" {} {} ", r.status_code, r.reason),
+        (None, _) => " NO RESPONSE ".to_string(),
     };
     let mut outcome = vec![Span::styled(badge, Theme::status_badge(status))];
     if let Some(ms) = ex.duration_ms {
@@ -174,16 +175,23 @@ fn summary_lines(app: &App, ex: &HttpExchange, width: usize) -> Vec<Line<'static
             Theme::duration(Some(ms)),
         ));
     }
-    let up = ex.request.body.as_ref().map_or(0, Vec::len);
-    let down = ex
-        .response
-        .as_ref()
-        .and_then(|r| r.body.as_ref())
-        .map_or(0, Vec::len);
-    outcome.push(Span::styled(
-        format!("  ↑ {}  ↓ {}", format_size(up), format_size(down)),
-        Theme::dim(),
-    ));
+    let detail = match ex.protocol {
+        Protocol::Http => {
+            let up = ex.request.body.as_ref().map_or(0, Vec::len);
+            let down = ex
+                .response
+                .as_ref()
+                .and_then(|r| r.body.as_ref())
+                .map_or(0, Vec::len);
+            format!("  ↑ {}  ↓ {}", format_size(up), format_size(down))
+        }
+        Protocol::Postgres => ex
+            .response
+            .as_ref()
+            .and_then(|r| header_value(&r.headers, "rows"))
+            .map_or(String::new(), |rows| format!("  {rows} rows")),
+    };
+    outcome.push(Span::styled(detail, Theme::dim()));
     lines.push(Line::from(outcome));
 
     // Endpoints and capture time.
@@ -255,45 +263,85 @@ fn header_lines(lines: &mut Vec<Row>, headers: &[(String, String)], width: usize
 
 fn body_section(
     lines: &mut Vec<Row>,
-    name: &str,
+    label: &str,
     headers: &[(String, String)],
     body: &[u8],
     width: usize,
 ) {
-    let mut title = format!("{name} Body · {}", format_size(body.len()));
+    let mut title = format!("{label} · {}", format_size(body.len()));
     if let Some(content_type) = header_value(headers, "content-type") {
-        title = format!("{name} Body · {content_type} · {}", format_size(body.len()));
+        title = format!("{label} · {content_type} · {}", format_size(body.len()));
     }
     lines.push(Row::new(Line::raw("")));
     lines.push(section(title));
     lines.extend(body_lines(body, width));
 }
 
+/// Section names for the request and response halves of an exchange.
+struct Labels {
+    request_headers: &'static str,
+    request_body: &'static str,
+    response_headers: &'static str,
+    response_body: &'static str,
+}
+
+fn labels(protocol: Protocol) -> Labels {
+    match protocol {
+        Protocol::Http => Labels {
+            request_headers: "Request Headers",
+            request_body: "Request Body",
+            response_headers: "Response Headers",
+            response_body: "Response Body",
+        },
+        Protocol::Postgres => Labels {
+            request_headers: "Query Info",
+            request_body: "SQL",
+            response_headers: "Result Info",
+            response_body: "Result",
+        },
+    }
+}
+
 /// Scrollable part of the detail pane: headers and bodies of both directions.
 fn content_lines(ex: &HttpExchange, width: usize) -> Vec<Row> {
+    let names = labels(ex.protocol);
     let mut lines = Vec::new();
 
     lines.push(section(format!(
-        "Request Headers ({}) · {}",
+        "{} ({}) · {}",
+        names.request_headers,
         ex.request.headers.len(),
         ex.request.version
     )));
     header_lines(&mut lines, &ex.request.headers, width);
     if let Some(body) = ex.request.body.as_deref().filter(|b| !b.is_empty()) {
-        body_section(&mut lines, "Request", &ex.request.headers, body, width);
+        body_section(
+            &mut lines,
+            names.request_body,
+            &ex.request.headers,
+            body,
+            width,
+        );
     }
 
     lines.push(Row::new(Line::raw("")));
     match &ex.response {
         Some(response) => {
             lines.push(section(format!(
-                "Response Headers ({}) · {}",
+                "{} ({}) · {}",
+                names.response_headers,
                 response.headers.len(),
                 response.version
             )));
             header_lines(&mut lines, &response.headers, width);
             if let Some(body) = response.body.as_deref().filter(|b| !b.is_empty()) {
-                body_section(&mut lines, "Response", &response.headers, body, width);
+                body_section(
+                    &mut lines,
+                    names.response_body,
+                    &response.headers,
+                    body,
+                    width,
+                );
             }
         }
         None => lines.push(Row::new(Line::styled(

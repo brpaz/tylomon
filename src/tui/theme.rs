@@ -119,10 +119,10 @@ impl Theme {
 
     pub fn method(method: &str) -> Style {
         match method {
-            "GET" => Self::method_get(),
-            "POST" => Self::method_post(),
-            "PUT" | "PATCH" => Self::method_put(),
-            "DELETE" => Self::method_delete(),
+            "GET" | "SELECT" => Self::method_get(),
+            "POST" | "INSERT" | "UPDATE" | "MERGE" => Self::method_post(),
+            "PUT" | "PATCH" | "CREATE" | "ALTER" => Self::method_put(),
+            "DELETE" | "DROP" | "TRUNCATE" => Self::method_delete(),
             _ => Self::dim(),
         }
     }

@@ -116,6 +116,7 @@ mod tests {
             src_port: 40000,
             dst_port: 80,
             id: 0,
+            protocol: Default::default(),
             timestamp_us: None,
             duration_ms: ms,
         }

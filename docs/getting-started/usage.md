@@ -109,6 +109,24 @@ Capture failures appear in a red banner at the top, one per distinct message. Th
 
 The `curl` command repeats the request with its method, URL (from the `Host` header), headers and body. Headers curl derives itself, such as `Content-Length`, are left out.
 
+## PostgreSQL
+
+tylomon recognises PostgreSQL connections by their startup packet and decodes both directions. Each query becomes an entry in the list next to the HTTP exchanges:
+
+- the list shows the statement's verb (`SELECT`, `INSERT`, ...) and the SQL on one line, with `OK` or `ERR`, the duration and the endpoints
+- the detail pane shows the user, database and application, the full SQL, bound parameters for prepared statements (`-- $1 = 42`), the command tag (`SELECT 3`, `INSERT 0 1`), the row count and a table with the first 50 rows
+- errors are shown with the SQLSTATE, message, detail and hint, and match `status:5xx`
+- each connection also appears once as a `CONNECT user@database` entry with the time the login took, or the reason it failed
+
+Use `proto:pg` to show only queries, `proto:http` to hide them, and the usual filters for the rest: `proto:pg >100ms`, `proto:pg path:users`, `proto:pg status:5xx`. The service map includes database edges (`app → db:5432`).
+
+Limits:
+
+- Connections that negotiate TLS (`sslmode=require` or a server with SSL enabled) are shown as a single `CONNECT … (TLS encrypted)` entry; their queries cannot be decoded. Clients using `sslmode=prefer` against a server without SSL work, which is the usual case between containers.
+- The connection must be captured from its start. Connections opened before tylomon started are not recognised.
+- Parameters and result values are shown as sent. Passwords are never read or stored, but query parameters and rows can contain sensitive data.
+- Copy as `curl` and HAR export apply to HTTP exchanges only. JSON Lines output includes PostgreSQL entries with `"protocol": "postgres"`.
+
 ## Compressed bodies
 
 Request and response bodies with `Content-Encoding: gzip`, `deflate` or `br` are decoded before display, so JSON is readable and pretty-printed. Decoded output is capped at 16 MiB per body, and a body cut short by the capture shows what could be decoded. Other encodings are shown as received.

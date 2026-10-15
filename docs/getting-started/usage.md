@@ -127,6 +127,14 @@ Limits:
 - Parameters and result values are shown as sent. Passwords are never read or stored, but query parameters and rows can contain sensitive data.
 - Copy as `curl` and HAR export apply to HTTP exchanges only. JSON Lines output includes PostgreSQL entries with `"protocol": "postgres"`.
 
+## gRPC and HTTP/2
+
+Connections that start with the HTTP/2 client preface (cleartext HTTP/2 with prior knowledge, which is how gRPC runs between containers) are decoded. Calls with an `application/grpc` content type are shown as `gRPC /pkg.Service/Method` with the gRPC status (`OK`, `NOT_FOUND`, ...) and the messages of each direction rendered schema-less, like `protoc --decode_raw`: `1: "hello"`, nested messages in braces, and unknown binary as hex. Compressed messages (gzip) are decompressed. Other HTTP/2 requests appear as normal HTTP exchanges with version `HTTP/2`; copy as `curl` adds `--http2-prior-knowledge`.
+
+Use `proto:grpc` to show only gRPC calls. Failed calls match `status:5xx`. A sample is in `examples/grpc/`.
+
+Limits: TLS-encrypted HTTP/2 cannot be decoded, the connection must be captured from its start (HPACK needs the whole header history), and field names are unknown without the `.proto` files.
+
 ## Compressed bodies
 
 Request and response bodies with `Content-Encoding: gzip`, `deflate` or `br` are decoded before display, so JSON is readable and pretty-printed. Decoded output is capped at 16 MiB per body, and a body cut short by the capture shows what could be decoded. Other encodings are shown as received.

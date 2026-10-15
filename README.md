@@ -30,6 +30,7 @@ tylomon captures packets on Docker bridge network interfaces, reassembles TCP st
 - Full HTTP header and body inspection
 - Detail pane with a pinned summary, syntax-coloured JSON bodies and hex dumps for binary data
 - PostgreSQL queries decoded from the wire protocol: SQL, parameters, rows, command tags and errors (`proto:pg`)
+- Cleartext HTTP/2 and gRPC: calls shown as `/pkg.Service/Method` with grpc-status and protobuf messages decoded without a schema (`proto:grpc`)
 - Chunked transfer-encoding decoding and gzip / deflate / brotli body decoding
 - Keep-alive connection support
 - Structured filters (`status:5xx`, `dst:api`, `>500ms`, negation) and sort by response time
@@ -262,7 +263,7 @@ scripts/
 
 ## Limitations
 
-- **Plaintext only** -- decodes HTTP/1.x and PostgreSQL. TLS/HTTPS, HTTP/2 (including gRPC) and TLS-encrypted PostgreSQL connections are not decoded, and PostgreSQL connections must be captured from their start
+- **Plaintext only** -- decodes HTTP/1.x, HTTP/2 (h2c, including gRPC) and PostgreSQL. TLS/HTTPS, and TLS-encrypted HTTP/2, gRPC and PostgreSQL connections are not decoded. HTTP/2 and PostgreSQL connections must be captured from their start. Only HTTP/2 with prior knowledge (the usual gRPC setup) is supported, not the HTTP/1.1 upgrade
 - **Linux only** -- relies on Docker bridge network interfaces
 - **Requires elevated privileges** -- needs `CAP_NET_RAW` and `CAP_NET_ADMIN` for live capture (replaying a pcap does not)
 

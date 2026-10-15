@@ -46,6 +46,7 @@ task fmt              # format
 task lint             # fmt check + clippy
 task test             # nextest
 task build:release    # release build
+task e2e              # capture examples/ stack, assert on exchanges (Docker, jq, sudo)
 task ci               # full CI pipeline locally
 ```
 

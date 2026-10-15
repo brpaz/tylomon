@@ -10,7 +10,7 @@ tylomon captures packets on Docker bridge network interfaces, reassembles TCP st
 - **Automatic discovery** — finds Docker Compose project networks automatically
 - **Container names** — resolves container IPs to human-readable names
 - **Full inspection** — view complete HTTP headers and bodies for both requests and responses
-- **JSON pretty-printing** — automatically formats JSON bodies for readability
+- **Readable bodies** — pretty-printed, syntax-coloured JSON, decoded gzip/brotli, and hex dumps for binary data
 - **Chunked decoding** — handles chunked transfer-encoding transparently
 - **Keep-alive support** — correctly tracks multiple exchanges on persistent connections
 - **Search & filter** — filter exchanges by method, path, or status code

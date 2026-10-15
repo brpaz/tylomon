@@ -18,14 +18,17 @@ tylomon captures packets on Docker bridge network interfaces, reassembles TCP st
 ## Features
 
 - Real-time HTTP traffic capture on Docker bridge networks
-- Automatic Docker Compose project and network discovery
+- Automatic Docker Compose project and network discovery; captures follow networks that are recreated or added while running
 - Container name resolution (shows container names instead of IPs)
 - Full HTTP header and body inspection
-- JSON body pretty-printing
-- Chunked transfer-encoding decoding
+- Detail pane with a pinned summary, syntax-coloured JSON bodies and hex dumps for binary data
+- Chunked transfer-encoding decoding and gzip / deflate / brotli body decoding
 - Keep-alive connection support
-- Search and filter by method, path, or status code
-- Keyboard-driven TUI with split-pane navigation
+- Structured filters (`status:5xx`, `dst:api`, `>500ms`, negation) and sort by response time
+- Record traffic to pcap (`--write`) and replay it later without root or Docker (`--read`)
+- JSON Lines streaming (`--no-tui`) and HAR export (`--har`, or `e` in the TUI)
+- Service map (`m`): requests, errors and p50/p95 latency per source→destination
+- Keyboard and mouse driven TUI: click or double-click to select and open, wheel to scroll, drag to select and copy text in the detail pane
 
 ## Getting Started
 
@@ -34,7 +37,13 @@ tylomon captures packets on Docker bridge network interfaces, reassembles TCP st
 - Linux (uses bridge interface capture via libpcap)
 - Docker daemon running
 - `libpcap` installed
-- Root or `CAP_NET_RAW` + `CAP_NET_ADMIN` capabilities
+- Root or `CAP_NET_RAW` + `CAP_NET_ADMIN` capabilities. Prefer granting the capabilities over `sudo`, which can hide your Wayland/X11 session (clipboard) and Compose environment:
+
+  ```bash
+  sudo setcap cap_net_raw,cap_net_admin=eip /usr/local/bin/tylomon
+  ```
+
+  Re-run `setcap` after every rebuild. When developing, `task run` does it for you.
 
 ### Installation
 
@@ -59,6 +68,20 @@ docker pull ghcr.io/brpaz/tylomon:latest
 ```
 
 ## Usage
+
+### Pick a target interactively
+
+```bash
+cd my-project && sudo tylomon
+```
+
+Without `--project` or `--network`, tylomon lists the Compose project found in the current directory (`compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml`, or the files in `COMPOSE_FILE`) plus every Docker bridge network that has containers. Use `j`/`k` and `Enter` to select, `/` to filter. The last choice is preselected next time. Selecting a Compose project captures on all of its networks.
+
+A sample project to try it out lives in [`examples/`](examples/):
+
+```bash
+cd examples && docker compose up -d && sudo tylomon
+```
 
 ### Monitor a Docker Compose project
 
@@ -90,6 +113,10 @@ Usage: tylomon [OPTIONS]
 Options:
   -p, --project <PROJECT>              Docker compose project name to monitor
   -n, --network <NETWORK>              Docker network name to capture on
+  -w, --write <FILE>                   Record captured packets to a pcap file
+  -r, --read <FILE>                    Replay a pcap file instead of capturing live
+      --no-tui                         Write exchanges to stdout as JSON Lines instead of showing the TUI
+      --har <FILE>                     Save all captured exchanges to a HAR file on exit
       --log-file <LOG_FILE>            Log file path [default: tylomon.log]
       --max-exchanges <MAX_EXCHANGES>  Maximum exchanges to keep in memory [default: 1000]
   -h, --help                           Print help
@@ -103,6 +130,14 @@ Options:
 | `j` / `k` | Navigate exchange list (or scroll detail pane) |
 | `Tab`     | Switch focus between list and detail panes    |
 | `/`       | Open search filter                            |
+| `?`       | Show all keys                                 |
+| `f`       | Follow the newest exchange                    |
+| `s`       | Toggle sort: capture order / slowest first    |
+| `z`       | Zoom the focused pane full screen             |
+| `< / >`   | Resize the list pane (or drag the border)     |
+| `m`       | Toggle service map                            |
+| `3`       | Copy selected request as a `curl` command     |
+| `e`       | Export listed exchanges to a HAR file         |
 | `Enter`   | Apply filter (in filter mode)                 |
 | `Esc`     | Cancel filter / clear active filter           |
 | `q`       | Clear active filter, or quit                  |
@@ -131,8 +166,9 @@ task lint         # Run fmt check + clippy
 task test         # Run tests
 task build        # Build debug binary
 task build:release # Build release binary
-task run -- --project myapp  # Run in dev mode
+task run -- --project myapp  # Build, grant capabilities, run
 task watch        # Watch and rebuild on changes
+task e2e          # Capture the examples/ stack and assert on the exchanges
 task ci           # Run full CI pipeline locally
 task docker:build # Build Docker image locally
 ```
@@ -153,22 +189,29 @@ src/
   main.rs           Entry point, event loop
   app.rs            Application state, keyboard handling, filtering
   cli.rs            CLI argument parsing (clap)
+  export.rs         JSONL and HAR serialisation
+  stats.rs          Per-edge traffic aggregation (service map)
+  filter.rs         Exchange filter query parsing and matching
   capture/
     bridge.rs       Docker bridge interface discovery
     packet.rs       Ethernet/IP/TCP packet parsing (etherparse)
     stream.rs       TCP stream reassembly
-    pipeline.rs     Capture thread, HTTP extraction, chunked decoding
+    pipeline.rs     Capture/replay threads, HTTP extraction, chunked decoding, pcap recording
   docker/
+    compose.rs      Compose file / COMPOSE_FILE project detection
     discovery.rs    Docker network/container discovery (bollard)
     resolver.rs     Container IP-to-name resolution
     task.rs         Async resolver polling
+    watch.rs        Re-attaches captures when networks are recreated or added
   http/
     parser.rs       HTTP request/response parsing (httparse)
     types.rs        HttpExchange, HttpRequest, HttpResponse types
   tui/
     event.rs        Terminal input handling
+    picker.rs       Interactive target selection list
     theme.rs        Color scheme
-    views/          TUI panels (exchange list, detail, status bar)
+    rows.rs         Detail rows and text selection
+    views/          TUI panels (exchange list, detail, body rendering, help, service map, status bar)
 ```
 
 ## How it works

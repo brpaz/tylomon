@@ -52,3 +52,13 @@ Multi-architecture images are available for `linux/amd64` and `linux/arm64`.
 ```bash
 docker build -t tylomon:local .
 ```
+
+## Packet capture permissions
+
+Capturing needs `CAP_NET_RAW` and `CAP_NET_ADMIN`. Grant them to the binary instead of running under `sudo`, which drops your desktop session (clipboard) and Compose environment variables:
+
+```bash
+sudo setcap cap_net_raw,cap_net_admin=eip /usr/local/bin/tylomon
+```
+
+Re-run the command after every rebuild or upgrade. The user running tylomon also needs access to the Docker socket.

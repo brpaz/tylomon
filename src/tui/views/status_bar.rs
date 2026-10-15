@@ -3,65 +3,62 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use crate::app::App;
+use crate::app::{App, ViewMode};
 use crate::tui::theme::Theme;
 
-/// Render the bottom status bar with keybindings and stats
+/// Render the bottom status bar with mode indicators, key hints and counts.
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
-    let exchange_count = app.exchanges.len();
-    let filtered_count = app.filtered_exchanges().len();
+    let total = app.exchanges.len();
+    let shown = app.filtered_exchanges().len();
 
-    let pause_indicator = if app.paused {
-        Span::styled(" ⏸ PAUSED ", Theme::pause_indicator())
+    let mut spans = Vec::new();
+    if app.paused {
+        spans.push(Span::styled(" ⏸ PAUSED ", Theme::pause_indicator()));
+    }
+    if app.zoom {
+        spans.push(Span::styled(" ⛶ ZOOM ", Theme::follow_indicator()));
+    }
+    if app.follow {
+        spans.push(Span::styled(" ⏬ FOLLOW ", Theme::follow_indicator()));
+    }
+
+    if app.filter_active {
+        spans.push(Span::styled(" /", Theme::title()));
+        spans.push(Span::raw(app.filter_input.as_str()));
+        spans.push(Span::styled("▌", Theme::title()));
+        spans.push(Span::styled("  [Enter]apply  [Esc]cancel", Theme::dim()));
     } else {
-        Span::raw("")
-    };
-
-    let flash = app
-        .flash_message
-        .as_ref()
-        .map(|msg| Span::styled(format!(" ✓ {msg} "), Theme::flash_indicator()));
-
-    let line = if app.filter_active {
-        Line::from(vec![
-            pause_indicator,
-            Span::styled(" /", Theme::title()),
-            Span::raw(&app.filter_input),
-            Span::styled("▌", Theme::title()),
-            Span::styled("  [Enter]apply  [Esc]cancel", Theme::dim()),
-        ])
-    } else if !app.filter_text.is_empty() {
-        let mut spans = vec![
-            pause_indicator,
-            Span::raw(
-                " [q]clear filter  [/]edit  [tab]pane  [p]ause  [y]copy [1]req [2]res  [c]lear  ",
-            ),
-            Span::styled(
-                format!(
-                    "| filter: \"{}\" ({filtered_count}/{exchange_count})",
-                    app.filter_text
-                ),
-                Theme::dim(),
-            ),
-        ];
-        if let Some(f) = flash {
-            spans.push(f);
+        // A message replaces the key hints so it is never pushed off the right edge.
+        if let Some(message) = &app.flash_message {
+            spans.push(Span::styled(
+                format!(" ✓ {message} "),
+                Theme::flash_indicator(),
+            ));
+        } else {
+            let hints = match (app.view, app.filter_text.is_empty()) {
+                (ViewMode::List, _) if app.zoom => {
+                    " [q]unzoom  [j/k]nav/scroll  [tab]other pane  [/]filter  [?]help  "
+                }
+                (ViewMode::Map, _) => {
+                    " [m]back  [j/k]nav  [Enter]show requests  [/]filter  [?]help  "
+                }
+                (ViewMode::List, false) => " [q]clear filter  [/]edit  [s]ort  [m]ap  [?]help  ",
+                (ViewMode::List, true) => {
+                    " [q]uit  [j/k]nav  [tab]pane  [z]oom  [/]filter  [s]ort  [m]ap  [f]ollow  [?]help  "
+                }
+            };
+            spans.push(Span::raw(hints));
         }
-        Line::from(spans)
-    } else {
-        let mut spans = vec![
-            pause_indicator,
-            Span::raw(
-                " [q]uit  [j/k]nav  [tab]pane  [/]filter  [p]ause  [y]copy [1]req [2]res  [c]lear  ",
-            ),
-            Span::styled(format!("| {exchange_count} exchanges"), Theme::dim()),
-        ];
-        if let Some(f) = flash {
-            spans.push(f);
-        }
-        Line::from(spans)
-    };
+        let counts = if app.filter_text.is_empty() {
+            format!("| {total} exchanges")
+        } else {
+            format!("| filter: \"{}\" ({shown}/{total})", app.filter_text)
+        };
+        spans.push(Span::styled(counts, Theme::dim()));
+    }
 
-    let status = Paragraph::new(line).style(Theme::status_bar());
-    frame.render_widget(status, area);
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)).style(Theme::status_bar()),
+        area,
+    );
 }

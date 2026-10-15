@@ -5,11 +5,12 @@ use tokio::sync::mpsc;
 use tracing::{debug, warn};
 
 use crate::app::Action;
+use crate::docker::discovery::Target;
 use crate::docker::resolver::ContainerResolver;
 
 pub async fn spawn_resolver_task(
     docker: Docker,
-    network_name: String,
+    target: Target,
     action_tx: mpsc::Sender<Action>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -23,7 +24,16 @@ pub async fn spawn_resolver_task(
                 break;
             }
 
-            if let Err(e) = resolver.refresh(&docker, &network_name).await {
+            let networks = match target.resolve(&docker).await {
+                Ok(networks) => networks,
+                Err(e) => {
+                    warn!("Failed to resolve networks: {e}");
+                    continue;
+                }
+            };
+            let network_names: Vec<String> = networks.into_iter().map(|n| n.name).collect();
+
+            if let Err(e) = resolver.refresh(&docker, &network_names).await {
                 warn!("Failed to refresh container mappings: {e}");
                 continue;
             }

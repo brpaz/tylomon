@@ -29,6 +29,8 @@ etherparse = "=0.21.0"
 
 # HTTP parsing
 httparse = "=1.10.1"
+flate2 = "=1.1.10"
+brotli = "=9.0.0"
 
 # CLI
 clap = { version = "=4.6.7", features = ["derive"] }
@@ -37,11 +39,13 @@ clap = { version = "=4.6.7", features = ["derive"] }
 anyhow = "1"
 
 # Serialization
+base64 = "=0.23.1"
+serde_yaml_ng = "=0.10.0"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 
 # Clipboard
-arboard = "=3.7.0"
+arboard = { version = "=3.7.0", features = ["wayland-data-control"] }
 
 # Logging
 tracing = "=0.1.44"
@@ -49,6 +53,7 @@ tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 tracing-appender = "=0.2.5"
 
 [dev-dependencies]
+libc = "=0.2.190"
 pretty_assertions = "=1.4.1"
 
 [profile.release]

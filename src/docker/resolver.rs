@@ -22,24 +22,26 @@ impl ContainerResolver {
         }
     }
 
-    /// Refresh the IP-to-container mapping by querying Docker
-    pub async fn refresh(&mut self, docker: &Docker, network_name: &str) -> Result<()> {
-        let network = docker.inspect_network(network_name, None).await?;
+    /// Refresh the IP-to-container mapping by querying Docker for every given network.
+    /// The previous mapping is kept if any network cannot be inspected.
+    pub async fn refresh(&mut self, docker: &Docker, network_names: &[String]) -> Result<()> {
+        let mut mapping = HashMap::new();
 
-        self.mapping.clear();
+        for network_name in network_names {
+            let network = docker.inspect_network(network_name, None).await?;
 
-        if let Some(containers) = network.containers {
-            for (_id, info) in containers {
+            for (_id, info) in network.containers.unwrap_or_default() {
                 if let (Some(name), Some(ipv4)) = (info.name, info.ipv4_address) {
-                    // Remove CIDR suffix (e.g., "172.18.0.2/16" -> "172.18.0.2")
+                    // Drop the CIDR suffix of the address
                     let ip = ipv4.split('/').next().unwrap_or(&ipv4).to_string();
-                    // Remove leading "/" from container names
+                    // Docker prefixes container names with "/"
                     let clean_name = name.trim_start_matches('/').to_string();
-                    self.mapping.insert(ip, clean_name);
+                    mapping.insert(ip, clean_name);
                 }
             }
         }
 
+        self.mapping = mapping;
         Ok(())
     }
 

@@ -32,6 +32,15 @@ pub fn spawn_input_task(tx: mpsc::Sender<Action>) -> tokio::task::JoinHandle<Res
                             row: mouse.row,
                         })
                     }
+                    MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                        Some(Action::MouseDrag {
+                            column: mouse.column,
+                            row: mouse.row,
+                        })
+                    }
+                    MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
+                        Some(Action::MouseRelease)
+                    }
                     _ => None,
                 },
                 _ => None,

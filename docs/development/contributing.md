@@ -49,18 +49,23 @@ use crate::capture::bridge::bridge_interface_name;
 ### Testing
 
 - Unit tests go inside the source file in a `#[cfg(test)] mod tests` block
-- Integration tests go in the `tests/` directory
+- Integration tests go in the `tests/` directory. Pipeline behaviour is tested by generating a pcap and replaying it (see `tests/replay_tests.rs`)
+- UI logic is tested through `App` (keys, clicks, drags) with layout areas set by hand
 - Use `.expect("description")` instead of `.unwrap()` in tests
 
 ## TUI guidelines
 
-- Views are stateless free functions: `pub fn render(frame, app, area, focused)`
-- All application state lives in `App` — views only read from it
-- All keyboard input flows through `App::handle_key()`
+- Views are free functions: `pub fn render(frame, app, area, focused)`
+- All application state lives in `App`. Views read from it; the only things they write back are layout facts needed for mouse hit-testing (pane areas, scroll offsets) and the detail row cache
+- All keyboard input flows through `App::handle_key()` and mouse input through `App::update()`, so behaviour is testable without a terminal
 - Colors and styles are defined in `Theme` as static methods
+- Keep `Row`s in the detail pane one screen line each (pre-wrapped), so mouse positions map straight onto text
+- Every key binding belongs in `views/help.rs`, `docs/reference/keybindings.md` and the README essentials table
 
-## Pull requests
+## Commits and pull requests
 
-1. Run `task ci` before submitting
-2. Keep changes focused — one feature or fix per PR
-3. Add tests for new parsing or logic changes
+1. Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore(deps):` …)
+2. Run `task ci`, and `task e2e` when you touch capture, export or the example stack
+3. Keep changes focused — one feature or fix per PR
+4. Add tests for new parsing or logic changes
+5. Update the docs and README for user-visible changes

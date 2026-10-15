@@ -71,7 +71,7 @@ When running as a Docker container, you need host networking and packet capture 
 docker run --rm -it \
   --cap-add=NET_RAW --cap-add=NET_ADMIN \
   --network host \
-  ghcr.io/brunopaz/tylomon:latest \
+  ghcr.io/brpaz/tylomon:latest \
   --project my-compose-project
 ```
 
@@ -80,30 +80,24 @@ docker run --rm -it \
 
 ## Filtering traffic
 
-Once the TUI is running, press `/` to open the search filter. Type a search term and press `Enter` to filter exchanges.
+Press `/` in the TUI to open the filter, type a query and press `Enter`. A plain word matches the HTTP method, request path, status code, or source/destination container. Prefixed terms narrow it down, for example `status:5xx dst:api` or `>500ms -path:/health`. `q` or `Esc` clears an active filter. See [Keyboard Shortcuts](../reference/keybindings.md#search-filter) for the full syntax.
 
-A plain word matches the HTTP method, request path, status code, or source/destination container. Prefixed terms narrow it down, for example `status:5xx dst:api` or `>500ms -path:/health`. Press `?` at any time for the list of keys. The mouse works too: click an exchange to select it, double-click to open the detail pane, and use the wheel to scroll. Press `f` to follow the newest exchange as traffic arrives; the selection otherwise stays on the exchange you picked even when the list changes.
-
-Drag inside the detail pane to select text; it is copied when you release the mouse button. Double-click a word to copy just that word.
-
-Drag the border between the panes to resize them, or press `<` and `>`. Press `z` to zoom the focused pane to full screen and `q` or `Esc` to return. See the [layout keys](../reference/keybindings.md#layout).
-
-See [Keyboard Shortcuts](../reference/keybindings.md#search-filter) for the full syntax.
-
-Press `s` to sort the list by response time, slowest first.
-
-Press `q` or `Esc` to clear an active filter.
+Press `s` to sort the list by response time, slowest first, and `f` to follow the newest exchange as traffic arrives. The selection stays on the exchange you picked even when the list changes.
 
 ## Navigating the interface
 
 The interface has two panes:
 
-- **Exchange list** (left) — shows all captured HTTP exchanges
-- **Detail view** (right) — shows full headers and body for the selected exchange
+- **Exchange list** (left) shows all captured HTTP exchanges
+- **Detail view** (right) shows a pinned summary, then the headers and bodies of the selected exchange
 
-Press `Tab` to switch focus between panes. When the detail pane is focused, `j`/`k` scrolls the detail content instead of navigating the list.
+Press `Tab` to switch focus between panes. When the detail pane is focused, `j`/`k` scrolls its content instead of moving the selection. Press `?` at any time for the list of keys.
 
-See [Keyboard Shortcuts](../reference/keybindings.md) for the full list of keybindings.
+With the mouse, click an exchange to select it, double-click to open the detail pane, and use the wheel to scroll. Drag inside the detail pane to select text; it is copied when you release the mouse button, and a double-click copies a single word.
+
+Drag the border between the panes to resize them, or press `<` and `>`. Press `z` to zoom the focused pane to full screen and `q` or `Esc` to return. See the [layout keys](../reference/keybindings.md#layout) and the [full keybinding list](../reference/keybindings.md).
+
+To copy a whole message, press `1` for the request, `2` for the response, `y` for both, or `3` for a `curl` command that repeats the request.
 
 ## Networks that change while running
 
@@ -113,7 +107,7 @@ Capture failures appear in a red banner at the top, one per distinct message. Th
 
 ## Copy as curl
 
-Select an exchange and press `3` to copy a `curl` command that repeats the request (method, URL from the `Host` header, headers and body). Headers curl derives itself, such as `Content-Length`, are left out.
+The `curl` command repeats the request with its method, URL (from the `Host` header), headers and body. Headers curl derives itself, such as `Content-Length`, are left out.
 
 ## Compressed bodies
 

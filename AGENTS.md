@@ -54,34 +54,42 @@ task ci               # full CI pipeline locally
 
 ```
 src/
-  main.rs              # Tokio runtime, event loop, task spawning
-  lib.rs               # Public module re-exports (app, capture, cli, docker, error, http, tui)
-  app.rs               # App state, Action enum, Pane enum, keyboard handling, filtering
-  cli.rs               # Clap CLI args (--project, --network, --log-file, --max-exchanges)
-  error.rs             # Custom Error enum (NetworkNotFound, BridgeNotFound, CaptureError, DockerError)
+  main.rs              # Tokio runtime, target discovery, event loop, headless JSONL mode
+  lib.rs               # Public module re-exports
+  app.rs               # App state, Action enum, keyboard/mouse handling, selection, filtering
+  cli.rs               # Clap CLI args (--project, --network, --write, --read, --no-tui, --har, ...)
+  error.rs             # Custom Error enum
+  export.rs            # JSONL, HAR and curl serialisation
+  filter.rs            # Filter query parser and matcher
+  stats.rs             # Per-edge aggregation (service map)
+  state.rs             # Remembered picker choice
   capture/
     bridge.rs          # bridge_interface_name() — Docker network ID → br-<12chars>
     packet.rs          # parse_packet() — raw bytes → ParsedPacket via etherparse
     stream.rs          # StreamReassembler — TCP flow tracking, sequence reassembly, drain()
-    pipeline.rs        # Capture thread (pcap), HTTP extraction, chunked decoding, keep-alive, stale sweep
+    pipeline.rs        # Capture/replay threads, HTTP extraction, pcap Recorder, stale sweep
   docker/
-    discovery.rs       # discover_project_networks(), discover_network_by_name() via bollard
+    compose.rs         # Compose file / COMPOSE_FILE project detection
+    discovery.rs       # Target resolution, network discovery via bollard
     resolver.rs        # ContainerResolver — IP-to-container-name mapping
     task.rs            # Async resolver polling task (5s interval)
+    watch.rs           # NetworkWatcher — one capture per network, follows changes
   http/
     parser.rs          # parse_request(), parse_response(), get_content_length(), is_chunked()
+    encoding.rs        # gzip / deflate / brotli decoding
     types.rs           # HttpExchange, HttpRequest, HttpResponse structs
   tui/
-    mod.rs             # Terminal init/restore (crossterm alternate screen)
+    mod.rs             # Terminal init/restore (alternate screen, mouse capture)
     event.rs           # Input task — crossterm events → Action channel
+    picker.rs          # Interactive target selection
+    rows.rs            # Detail rows and text selection
     theme.rs           # Theme struct with static Style methods
-    views/
-      mod.rs           # Main layout — title bar, split panes, status bar
-      exchange_list.rs # Left panel — filtered exchange list with container names
-      detail.rs        # Right panel — full request/response with headers and body
-      status_bar.rs    # Bottom bar — keybindings, filter state, exchange count
+    views/             # exchange_list, detail, body, service_map, help, status_bar, layout in mod.rs
 tests/
   http_parser_tests.rs # Integration tests for HTTP parsing
+  replay_tests.rs      # Pipeline tests over generated pcap files
+scripts/
+  e2e.sh               # End-to-end check against examples/ (Docker, jq, sudo)
 ```
 
 ## Code Style
@@ -130,14 +138,16 @@ tests/
 
 ### TUI Patterns
 - `Theme` struct with static methods returning `Style` — no constants
-- Views are free functions: `pub fn render(frame: &mut Frame, app: &App, area: Rect, focused: bool)`
-- App state is centralized in `App` struct — views are pure renderers with no state
-- Keyboard handling: all keys flow through `App::handle_key()`, not the event layer
+- Views are free functions: `pub fn render(frame: &mut Frame, app: &mut App, area: Rect, focused: bool)`
+- App state is centralized in `App` struct — views render from it and only write back layout facts for mouse hit-testing and the detail row cache
+- Keyboard handling: all keys flow through `App::handle_key()`, not the event layer; mouse goes through `App::update()`
+- New key bindings must be added to `views/help.rs`, `docs/reference/keybindings.md` and the README
 - Rendering at 30fps via `tokio::time::interval(Duration::from_millis(33))`
 
 ### Concurrency Pattern
 - Main thread: event loop with `tokio::select!` over action channel + render interval
-- Capture: blocking `pcap` in `spawn_blocking` thread, sends `Action::NewExchange` via channel
+- Capture: one non-blocking `pcap` thread per bridge, owned by `NetworkWatcher`, sends `Action::NewExchange` via channel
+- Replay (`--read`): one thread reads a pcap file through the same pipeline
 - Resolver: async polling task, sends `Action::ContainerUpdate` via channel
 - Input: async crossterm event stream, sends `Action::KeyPress` via channel
 

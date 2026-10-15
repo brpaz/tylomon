@@ -31,7 +31,7 @@
 ### Build and install
 
 ```bash
-git clone https://github.com/brunopaz/tylomon.git
+git clone https://github.com/brpaz/tylomon.git
 cd tylomon
 cargo build --release
 sudo cp target/release/tylomon /usr/local/bin/
@@ -42,7 +42,7 @@ sudo cp target/release/tylomon /usr/local/bin/
 Pull the pre-built image from GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/brunopaz/tylomon:latest
+docker pull ghcr.io/brpaz/tylomon:latest
 ```
 
 Multi-architecture images are available for `linux/amd64` and `linux/arm64`.

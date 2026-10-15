@@ -2,105 +2,138 @@
 
 ## Overview
 
-tylomon uses a multi-task architecture built on Tokio. The main thread runs an event loop that receives actions from three concurrent tasks via an `mpsc` channel.
+tylomon is a Tokio application with a single event loop. Everything that produces data runs in its own task or thread and sends `Action` values to the loop over an `mpsc` channel. The loop updates the `App` state and redraws the terminal at 30fps.
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌───────────────┐
-│  Input Task  │     │ Capture Task │     │ Resolver Task │
-│  (crossterm) │     │   (pcap)     │     │  (bollard)    │
-└──────┬───────┘     └──────┬───────┘     └───────┬───────┘
-       │ KeyPress           │ NewExchange         │ ContainerUpdate
-       └────────────┬───────┴─────────────────────┘
+┌────────────┐  ┌─────────────────────────┐  ┌───────────────┐  ┌────────────┐
+│ Input task │  │ Network watcher         │  │ Resolver task │  │  Replay    │
+│ (crossterm)│  │  └ capture thread / bridge│  │  (bollard)    │  │  thread    │
+└─────┬──────┘  │    (pcap)               │  └───────┬───────┘  │ (--read)   │
+      │         └────────────┬────────────┘          │          └─────┬──────┘
+      │ KeyPress, Mouse*     │ NewExchange,          │ ContainerUpdate │ NewExchange
+      │                      │ CaptureStarted/Error  │                 │
+      └──────────────┬───────┴───────────────────────┴─────────────────┘
+                     ▼
+             ┌──────────────┐        ┌────────────────────────────┐
+             │  Event loop  │ ─────▶ │ --no-tui: JSON Lines, HAR   │
+             │  (App state) │        └────────────────────────────┘
+             └──────┬───────┘
+                    │ 30fps
                     ▼
-            ┌──────────────┐
-            │  Event Loop  │
-            │  (App state) │
-            └──────┬───────┘
-                   │ 30fps
-                   ▼
-            ┌──────────────┐
-            │   Ratatui    │
-            │  (Terminal)  │
-            └──────────────┘
+             ┌──────────────┐
+             │   Ratatui    │
+             └──────────────┘
 ```
+
+With `--read` there is no watcher, resolver or Docker connection: only the replay thread feeds the loop. With `--no-tui` the input task is not started and the loop prints each exchange instead of drawing.
 
 ## Source tree
 
 ```
 src/
-  main.rs              # Tokio runtime, event loop, task spawning
+  main.rs              # Runtime, target discovery, event loop, headless JSONL mode
   lib.rs               # Public module re-exports
-  app.rs               # App state, Action/Pane enums, keyboard handling, filtering
+  app.rs               # App state, Action enum, keyboard and mouse handling
   cli.rs               # Clap CLI argument definitions
   error.rs             # Custom Error enum
+  export.rs            # JSONL, HAR and curl serialisation
+  filter.rs            # Filter query parser and matcher
+  stats.rs             # Per-edge aggregation for the service map
+  state.rs             # Remembered picker choice (XDG state directory)
   capture/
     bridge.rs          # Docker network ID → bridge interface name (br-<12chars>)
     packet.rs          # Raw bytes → ParsedPacket via etherparse
     stream.rs          # TCP stream reassembly with FlowKey tracking
-    pipeline.rs        # Capture thread, HTTP extraction, chunked decoding, keep-alive
+    pipeline.rs        # Capture/replay threads, HTTP extraction, pcap recording
   docker/
-    discovery.rs       # Docker network discovery via bollard
+    compose.rs         # Compose file and COMPOSE_FILE project detection
+    discovery.rs       # Network discovery, Target resolution (bollard)
     resolver.rs        # Container IP-to-name resolution
     task.rs            # Async resolver polling task (5s interval)
+    watch.rs           # NetworkWatcher: one capture per network, follows changes
   http/
     parser.rs          # HTTP request/response parsing via httparse
+    encoding.rs        # gzip / deflate / brotli decoding
     types.rs           # HttpExchange, HttpRequest, HttpResponse structs
   tui/
-    mod.rs             # Terminal init/restore (crossterm alternate screen)
+    mod.rs             # Terminal init/restore (alternate screen, mouse capture)
     event.rs           # Input task — crossterm events → Action channel
-    theme.rs           # Color scheme (Theme struct with static Style methods)
+    picker.rs          # Interactive target selection
+    rows.rs            # Detail rows, text selection, highlighting
+    theme.rs           # Colour scheme (static Style methods)
     views/
-      mod.rs           # Main layout — title bar, split panes, status bar
-      exchange_list.rs # Left panel — filtered exchange list with container names
-      detail.rs        # Right panel — full request/response with headers and body
-      status_bar.rs    # Bottom bar — keybindings, filter state, exchange count
+      mod.rs           # Layout — title, error banner, panes, status bar, help
+      exchange_list.rs # Left pane — filtered, sorted exchange list
+      detail.rs        # Right pane — pinned summary, headers, bodies
+      body.rs          # Body rendering: coloured JSON, text, hex dump
+      service_map.rs   # Per-edge table
+      help.rs          # Key reference popup
+      status_bar.rs    # Bottom bar — mode indicators, hints, counts
 tests/
-  http_parser_tests.rs # Integration tests for HTTP parsing
+  http_parser_tests.rs # HTTP parsing
+  replay_tests.rs      # Pipeline tests over generated pcap files
+scripts/
+  e2e.sh               # End-to-end check against examples/
 ```
 
 ## Data pipeline
 
-### 1. Packet capture
+### 1. Target resolution
 
-The capture task runs pcap on the Docker bridge interface (e.g., `br-a1b2c3d4e5f6`) in a blocking thread via `tokio::task::spawn_blocking`. It filters for TCP traffic only.
+A `Target` (a Compose project or a single network) is resolved to Docker networks. It comes from `--project`, `--network`, or the picker, which lists the Compose project found in the working directory plus bridge networks that have containers. Each network maps to a Linux bridge interface (`br-<first 12 chars of the ID>`, or the name in `com.docker.network.bridge.name`, such as `docker0`).
 
-### 2. Packet parsing
+### 2. Capture
 
-Each captured packet is parsed using `etherparse` to extract IP addresses, TCP ports, flags, sequence numbers, and payload bytes.
+The `NetworkWatcher` starts one capture thread per network. Each thread opens the bridge with libpcap in non-blocking mode, filters TCP, and polls every 10 ms so it can always be stopped. Every 5 seconds the watcher re-resolves the target: networks that were recreated get a new capture on their new bridge, removed networks are dropped, and new networks of a project are added. Captures that ended on their own are restarted, except those that failed for lack of privileges.
 
-### 3. Stream reassembly
+With `--write`, every thread also writes its packets to one shared pcap file. With `--read`, a replay thread reads a pcap file through the same pipeline instead.
 
-The `StreamReassembler` tracks TCP flows by `(src_ip, src_port, dst_ip, dst_port)` tuples. It accumulates payload bytes per flow direction and handles SYN/FIN/RST lifecycle events.
+### 3. Packet parsing and reassembly
+
+`etherparse` extracts IP addresses, TCP ports, flags, sequence numbers and payload. The `StreamReassembler` accumulates payload bytes per flow direction and handles the SYN/FIN/RST lifecycle.
 
 ### 4. HTTP extraction
 
-The pipeline processes reassembled stream data to find HTTP request/response pairs:
+The pipeline finds request/response pairs in the reassembled data:
 
-- Parses HTTP headers using `httparse`
-- Handles `Content-Length` and `Transfer-Encoding: chunked` for body extraction
-- Supports keep-alive connections (multiple exchanges per TCP stream)
-- Sweeps stale pending requests after 30 seconds
+- Parses headers with `httparse`
+- Reads bodies by `Content-Length` or `Transfer-Encoding: chunked`
+- Decodes `Content-Encoding` gzip, deflate and brotli (output capped at 16 MiB)
+- Supports keep-alive connections (several exchanges per stream)
+- Measures response time from packet timestamps, so live capture and replay agree
+- Flushes requests with no response after 30 seconds (or at the end of a replayed file) as unanswered
 
 ### 5. Container resolution
 
-A separate async task polls the Docker API every 5 seconds to maintain an IP-to-container-name mapping. This runs independently so the capture pipeline is never blocked by Docker API calls.
+A separate async task re-resolves the target and polls the Docker API every 5 seconds to maintain an IP-to-container-name mapping, so the capture threads are never blocked by Docker calls.
 
-### 6. Rendering
+### 6. State and rendering
 
-The main event loop renders the TUI at 30fps using `tokio::time::interval`. Views are pure functions that read from `App` state — they hold no state of their own.
+`App` owns all state: exchanges (each with a unique id), the selected id, filter, sort, view mode, split width, zoom, text selection, and the cached detail rows for the selected exchange. Selection is tracked by exchange id, so it survives new traffic, sorting and filtering.
+
+Views render from `App` at 30fps. The few things they write back are layout facts needed for mouse hit-testing (pane areas, scroll offsets) and the detail cache.
+
+Capture failures are kept per interface in `App` and shown as a banner until that capture runs again or its network goes away.
+
+### 7. Output
+
+In the TUI, `e` writes the listed exchanges to a HAR file and `3` copies a `curl` command. In headless mode each completed exchange is written to stdout as one JSON object, and `--har` writes everything captured on exit.
 
 ## Key dependencies
 
 | Crate | Purpose |
 |-------|---------|
 | `ratatui` | Terminal UI framework |
-| `crossterm` | Terminal input/output |
+| `crossterm` | Terminal input/output and mouse events |
 | `tokio` | Async runtime |
-| `pcap` | Packet capture (libpcap bindings) |
+| `pcap` | Packet capture, recording and replay (libpcap bindings) |
 | `etherparse` | Ethernet/IP/TCP packet parsing |
 | `httparse` | HTTP request/response parsing |
+| `flate2`, `brotli` | Body decompression |
 | `bollard` | Docker Engine API client |
 | `clap` | CLI argument parsing |
+| `serde`, `serde_json`, `serde_yaml_ng` | Serialisation, JSON bodies, Compose `name:` |
+| `base64` | Binary bodies in JSONL and HAR |
+| `arboard` | Clipboard (X11 and Wayland) |
 | `anyhow` | Error handling |
-| `tracing` | Structured logging |
-| `serde` / `serde_json` | Serialization and JSON pretty-printing |
+| `tracing` | Structured logging to a file |

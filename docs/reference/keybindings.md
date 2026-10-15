@@ -5,14 +5,23 @@
 | Key       | Action                        |
 |-----------|-------------------------------|
 | `?`       | Show / hide the in-app key reference |
-| `q`       | Clear active filter, or quit  |
+| `q` / `Esc` | Step back one level: clear the text selection, then leave zoom, then clear the filter, then quit |
 | `Ctrl+C`  | Quit immediately              |
 | `c`       | Clear all exchanges           |
 | `s`       | Toggle sort: capture order / slowest first |
 | `p`       | Pause / resume capture        |
-| `3`       | Copy the selected request as a `curl` command |
-| `e`       | Export the listed (filtered) exchanges to `tylomon-<timestamp>.har` in the current directory |
 | `Tab`     | Switch focus between panes    |
+
+## Copy and export
+
+| Key       | Action                        |
+|-----------|-------------------------------|
+| `y`       | Copy the whole exchange (request and response) |
+| `1` / `2` | Copy the request / the response |
+| `3`       | Copy the request as a `curl` command |
+| `e`       | Export the listed (filtered) exchanges to `tylomon-<timestamp>.har` in the current directory |
+
+Dragging in the detail pane copies the selected text, see [Mouse](#mouse). Copy confirmations replace the key hints in the status bar for a few seconds.
 
 ## Navigation
 

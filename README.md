@@ -232,6 +232,8 @@ src/
     packet.rs       Ethernet/IP/TCP packet parsing (etherparse)
     stream.rs       TCP stream reassembly
     pipeline.rs     Capture and replay threads, HTTP extraction, pcap recording
+    http2.rs        Cleartext HTTP/2 and gRPC decoder
+    protobuf.rs     Schema-less protobuf rendering
     postgres.rs     PostgreSQL wire protocol decoder
   docker/
     compose.rs      Compose file / COMPOSE_FILE project detection

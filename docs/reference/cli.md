@@ -73,7 +73,7 @@ Each line has these fields:
 
 | Field | Description |
 |-------|-------------|
-| `protocol` | `http` or `postgres` |
+| `protocol` | `http`, `postgres` or `grpc` |
 | `timestamp` | Request time, ISO 8601 UTC |
 | `method`, `path`, `http_version` | Request line. For PostgreSQL: statement verb, SQL on one line, `PostgreSQL` |
 | `status` | Response status, `null` if no response was seen. For PostgreSQL: 200 on success, 500 on error |

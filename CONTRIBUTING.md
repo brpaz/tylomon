@@ -119,7 +119,7 @@ GitHub Actions runs on every push to `main` and on pull requests:
 | **Build Binary** | Release build; uploaded as an artifact, and attached to the release when one is published |
 | **Build & Push Docker Image** | Multi-arch image (amd64, arm64) pushed to `ghcr.io`; runs for published releases only |
 | **Docs** | Builds the site with `--strict` and deploys it to GitHub Pages when `docs/`, `zensical.toml` or `requirements-docs.txt` change on `main` |
-| **Release Drafter** | Keeps the next release's notes up to date from merged pull requests |
+| **Draft release** | On pushes to `main`, [draftsman](https://github.com/brpaz/draftsman) updates the draft release notes from the Conventional Commits since the last release |
 
 ### Dependencies
 
@@ -131,8 +131,8 @@ Do not bump versions by hand unless a change needs it. If you add a dependency, 
 
 Releases follow [semantic versioning](https://semver.org/).
 
-1. [Release Drafter](.github/release-drafter.yml) maintains a draft release. Pull requests are labelled automatically from the files they touch (`documentation`, `dependencies`, `chore`) and by maintainers (`feature`, `fix`, `breaking`, …). The labels decide the changelog section and the next version: `breaking` is a major bump, `feature` a minor one, anything else a patch.
-2. A maintainer checks the draft and publishes it, which creates the `vX.Y.Z` tag.
+1. [draftsman](https://github.com/brpaz/draftsman) maintains a draft release. On every push to `main` it reads the Conventional Commits since the last release, groups them into sections by type (`feat` is Features, `fix` is Bug Fixes, `chore`, `build` and `ci` are Maintenance, `docs` is Documentation, anything else is Other), and picks the next version itself: a breaking change (`!` or a `BREAKING CHANGE:` footer) is a major bump, `feat` a minor one, anything else a patch. The sections are configured in [`.draftsman.yml`](.draftsman.yml).
+2. A maintainer checks the draft and publishes it (from the GitHub release page, or with `draftsman publish`), which creates the `vX.Y.Z` tag.
 3. Publishing triggers CI to set the version in `Cargo.toml` from the tag, build the release binary and attach it to the release, and build and push the multi-arch Docker image to `ghcr.io/brpaz/tylomon`.
 
-Because merged pull requests feed the release notes, give them clear titles and the right label.
+The release notes are built from commit messages, not labels, so the squash-merge title of a pull request (which becomes the commit on `main`) must be a clear Conventional Commit. To keep a commit out of the release notes, add `[skip changelog]` anywhere in its message or a `Skip-Changelog: true` footer.

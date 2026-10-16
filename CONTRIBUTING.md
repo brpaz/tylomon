@@ -53,8 +53,8 @@ tylomon needs `CAP_NET_RAW` and `CAP_NET_ADMIN` and parses untrusted network dat
 
 ## More
 
-The rest of the contributor documentation is on the docs site (and in [`docs/development/`](docs/development/)):
+The rest of the contributor documentation is in [`docs/`](docs/):
 
-- **[Development Setup](https://brpaz.github.io/tylomon/development/setup/)**: environment, Task commands, tests and git hooks
-- **[Contributing guide](https://brpaz.github.io/tylomon/development/contributing/)**: CI, dependency updates, how releases are made, and the code style
-- **[Architecture](https://brpaz.github.io/tylomon/reference/architecture/)**: source tree and data pipeline
+- **[Development Setup](docs/development/setup.md)**: environment, Task commands, tests and git hooks
+- **[Contributing guide](docs/development/contributing.md)**: CI, dependency updates, how releases are made, and the code style
+- **[Architecture](docs/reference/architecture.md)**: source tree and data pipeline

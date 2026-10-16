@@ -2,7 +2,7 @@
 name = "tylomon"
 version = "0.1.0"
 edition = "2024"
-description = "Monitor HTTP traffic between Docker containers"
+description = "Monitor HTTP, gRPC and PostgreSQL traffic between Docker containers"
 license = "MIT"
 repository = "https://github.com/brpaz/tylomon"
 

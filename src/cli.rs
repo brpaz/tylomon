@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-/// Monitor HTTP traffic between Docker containers
+/// Monitor HTTP, gRPC and PostgreSQL traffic between Docker containers
 #[derive(Parser, Debug)]
 #[command(name = "tylomon", version, about)]
 pub struct Cli {

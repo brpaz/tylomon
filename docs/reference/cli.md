@@ -111,7 +111,7 @@ sudo RUST_LOG=tylomon=debug tylomon --project myapp
 
 ## `--max-exchanges`
 
-Maximum number of HTTP exchanges to keep in memory. When the limit is reached, the oldest exchanges are discarded. Defaults to `1000`.
+Maximum number of exchanges (HTTP, PostgreSQL and gRPC) to keep in memory. When the limit is reached, the oldest exchanges are discarded. Defaults to `1000`.
 
 ```bash
 sudo tylomon --project myapp --max-exchanges 5000

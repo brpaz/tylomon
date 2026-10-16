@@ -13,18 +13,18 @@
 
 </div>
 
-> Monitor HTTP traffic between Docker containers in real time, directly from the terminal.
+> Monitor HTTP, gRPC and PostgreSQL traffic between Docker containers in real time, directly from the terminal.
 
 > [!WARNING]
 > **AI disclosure.** tylomon is vibe coded: the code, tests and documentation were written by AI coding assistants under human direction. The first version was written with Claude Opus 4.6; later work, including most features, was done with Claude Sonnet 5.5 in Claude Code. It was built to experiment with AI workflows and to solve a specific itch. There are automated tests and an end-to-end check against a sample Docker stack, but no independent code review or security audit. tylomon captures network traffic and needs elevated capabilities (`CAP_NET_RAW`, `CAP_NET_ADMIN`), so read the code before running it on a machine or network you care about. Use it at your own risk.
 
 ## About
 
-tylomon captures packets on Docker bridge network interfaces, reassembles TCP streams, parses HTTP request/response pairs, and displays them in an interactive terminal dashboard.
+tylomon captures packets on Docker bridge network interfaces, reassembles TCP streams, parses HTTP, gRPC and PostgreSQL request/response pairs, and displays them in an interactive terminal dashboard.
 
 ## Features
 
-- Real-time HTTP traffic capture on Docker bridge networks
+- Real-time traffic capture on Docker bridge networks
 - Automatic Docker Compose project and network discovery; captures follow networks that are recreated or added while running
 - Container name resolution (shows container names instead of IPs)
 - Full HTTP header and body inspection
@@ -177,63 +177,25 @@ With the mouse: click to select, double-click to open, wheel to scroll, drag in 
 
 See the [keybindings reference](https://brpaz.github.io/tylomon/reference/keybindings/) for everything.
 
-## Contributing
-
-Bug reports, feature ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers how to report issues, how to set up the development environment and run the tests, and the development process from branch to release.
-
-## Architecture
-
-```
-src/
-  main.rs           Entry point, event loop, headless JSONL mode
-  app.rs            Application state, keyboard and mouse handling
-  cli.rs            CLI argument parsing (clap)
-  export.rs         JSONL, HAR and curl serialisation
-  filter.rs         Exchange filter query parsing and matching
-  stats.rs          Per-edge traffic aggregation (service map)
-  state.rs          Remembered picker choice
-  error.rs          Error types
-  capture/
-    bridge.rs       Docker network ID to bridge interface name
-    packet.rs       Ethernet/IP/TCP packet parsing (etherparse)
-    stream.rs       TCP stream reassembly
-    pipeline.rs     Capture and replay threads, HTTP extraction, pcap recording
-    http2.rs        Cleartext HTTP/2 and gRPC decoder
-    protobuf.rs     Schema-less protobuf rendering
-    postgres.rs     PostgreSQL wire protocol decoder
-  docker/
-    compose.rs      Compose file / COMPOSE_FILE project detection
-    discovery.rs    Network discovery and target resolution (bollard)
-    resolver.rs     Container IP-to-name resolution
-    task.rs         Async resolver polling
-    watch.rs        Re-attaches captures when networks change
-  http/
-    parser.rs       HTTP request/response parsing (httparse)
-    encoding.rs     gzip / deflate / brotli body decoding
-    types.rs        HttpExchange, HttpRequest, HttpResponse types
-  tui/
-    event.rs        Terminal input handling
-    picker.rs       Interactive target selection
-    rows.rs         Detail rows and text selection
-    theme.rs        Colour scheme
-    views/          Exchange list, detail, body rendering, service map, help, status bar
-scripts/
-  e2e.sh            End-to-end check against examples/
-```
-
 ## How it works
 
 1. Resolves the target (a flag, the picker, or the Compose files in the current directory) to Docker networks and their bridge interfaces
 2. Opens one pcap capture per bridge, filtering TCP, and keeps them in sync when networks are removed, recreated or added. With `--read`, replays a pcap file instead
-3. Reassembles TCP streams and parses HTTP request/response pairs, decoding chunked and compressed bodies. Timing comes from packet timestamps
+3. Reassembles TCP streams and parses HTTP, HTTP/2 (gRPC) and PostgreSQL request/response pairs, decoding chunked and compressed bodies. Timing comes from packet timestamps
 4. Resolves container IPs to names via the Docker API
 5. Shows everything in a Ratatui dashboard at 30fps, or streams it as JSON Lines, or exports a HAR file
+
+The [architecture page](https://brpaz.github.io/tylomon/reference/architecture/) has the source tree and the full data pipeline.
 
 ## Limitations
 
 - **Plaintext only** -- decodes HTTP/1.x, HTTP/2 (h2c, including gRPC) and PostgreSQL. TLS/HTTPS, and TLS-encrypted HTTP/2, gRPC and PostgreSQL connections are not decoded. HTTP/2 and PostgreSQL connections must be captured from their start. Only HTTP/2 with prior knowledge (the usual gRPC setup) is supported, not the HTTP/1.1 upgrade
 - **Linux only** -- relies on Docker bridge network interfaces
 - **Requires elevated privileges** -- needs `CAP_NET_RAW` and `CAP_NET_ADMIN` for live capture (replaying a pcap does not)
+
+## Contributing
+
+Bug reports, feature ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers how to report issues, how to set up the development environment and run the tests, and the development process from branch to release.
 
 ## Documentation
 

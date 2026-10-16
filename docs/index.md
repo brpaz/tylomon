@@ -1,20 +1,21 @@
 # tylomon
 
-Monitor HTTP traffic between Docker containers in real time.
+Monitor HTTP, gRPC and PostgreSQL traffic between Docker containers in real time.
 
-tylomon captures packets on Docker bridge network interfaces, reassembles TCP streams, parses HTTP request/response pairs, and displays them in an interactive terminal dashboard.
+tylomon captures packets on Docker bridge network interfaces, reassembles TCP streams, parses HTTP, gRPC and PostgreSQL request/response pairs, and displays them in an interactive terminal dashboard.
 
 !!! warning "AI disclosure"
     tylomon is vibe coded: the code, tests and documentation were written by AI coding assistants under human direction. The first version was written with Claude Opus 4.6; later work, including most features, was done with Claude Sonnet 5.5 in Claude Code. There are automated tests and an end-to-end check against a sample Docker stack, but no independent code review or security audit. tylomon captures network traffic and needs elevated capabilities (`CAP_NET_RAW`, `CAP_NET_ADMIN`), so read the code before running it on a machine or network you care about. Use it at your own risk.
 
 ## Features
 
-- **Real-time capture** — monitors HTTP traffic on Docker bridge networks as it happens
+- **Real-time capture** — monitors traffic on Docker bridge networks as it happens
 - **Target picker** — run `tylomon` in a Compose project directory (`compose.yaml`, `docker-compose.yml` or `COMPOSE_FILE`) and choose the project or any bridge network from a list
 - **Follows your stack** — captures every network of a project and re-attaches when networks are recreated or added
 - **Container names** — resolves container IPs to human-readable names
 - **Full inspection** — complete HTTP headers and bodies for requests and responses, in a detail pane with a pinned summary
 - **Readable bodies** — pretty-printed, syntax-coloured JSON, decoded gzip/deflate/brotli and chunked bodies, and hex dumps for binary data
+- **gRPC and HTTP/2** — decodes cleartext HTTP/2: gRPC calls as `/pkg.Service/Method` with their status and protobuf messages, other streams as HTTP
 - **PostgreSQL** — decodes the PostgreSQL wire protocol: SQL text, bound parameters, rows returned, command tags and errors with their SQLSTATE
 - **Filters and sorting** — `status:5xx dst:api >500ms -path:/health`, and sort by response time
 - **Service map** — requests, errors and p50/p95 latency per source and destination

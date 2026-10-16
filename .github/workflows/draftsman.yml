@@ -1,0 +1,29 @@
+name: Draft release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: draftsman
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    name: Update draft release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Referenced by tag, not commit SHA: the action downloads the release binary named
+      # by its own ref.
+      - uses: brpaz/draftsman@v0.3.0
+        with:
+          command: draft
+          backend: github
+          token: ${{ secrets.GITHUB_TOKEN }}

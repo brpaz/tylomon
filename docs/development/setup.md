@@ -1,6 +1,6 @@
 # Development Setup
 
-How to set up the environment and run the checks. Reporting issues and the pull request and release process are in [CONTRIBUTING.md](https://github.com/brpaz/tylomon/blob/main/CONTRIBUTING.md).
+How to set up the environment and run the checks. Reporting issues and the pull request and release process are in [Contributing](contributing.md).
 
 ## Prerequisites
 

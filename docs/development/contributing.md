@@ -1,5 +1,7 @@
 # Contributing
 
+This page is the code style guide. How to report issues, set up the environment and the development and release process are in [CONTRIBUTING.md](https://github.com/brpaz/tylomon/blob/main/CONTRIBUTING.md) in the repository.
+
 ## Code style
 
 ### Formatting

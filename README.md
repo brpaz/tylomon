@@ -177,43 +177,9 @@ With the mouse: click to select, double-click to open, wheel to scroll, drag in 
 
 See the [keybindings reference](https://brpaz.github.io/tylomon/reference/keybindings/) for everything.
 
-## Development
+## Contributing
 
-### Prerequisites
-
-The project uses [devenv.sh](https://devenv.sh/) to manage the development environment. With devenv installed:
-
-```bash
-devenv shell
-```
-
-This provides Rust toolchain, libpcap, [Task](https://taskfile.dev/), [Lefthook](https://github.com/evilmartians/lefthook), cargo-watch, and cargo-nextest.
-
-### Common tasks
-
-```bash
-task fmt          # Format code
-task lint         # Run fmt check + clippy
-task test         # Run tests
-task build        # Build debug binary
-task build:release # Build release binary
-task install      # Build release, install it and grant capabilities (INSTALL_DIR=, SETCAP=)
-task run -- --project myapp  # Build, grant capabilities, run
-task watch        # Watch and rebuild on changes
-task e2e          # Capture the examples/ stack and assert on the exchanges
-task ci           # Run full CI pipeline locally
-task docker:build # Build Docker image locally
-task docs:serve   # Preview the documentation (Zensical)
-```
-
-### Git hooks
-
-[Lefthook](https://github.com/evilmartians/lefthook) is configured with:
-
-- **pre-commit**: format check
-- **pre-push**: format check, clippy, tests
-
-Hooks are installed automatically when entering the devenv shell.
+Bug reports, feature ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers how to report issues, how to set up the development environment and run the tests, and the development process from branch to release.
 
 ## Architecture
 

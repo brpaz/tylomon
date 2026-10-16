@@ -29,6 +29,8 @@ tylomon captures packets on Docker bridge network interfaces, reassembles TCP st
 - Container name resolution (shows container names instead of IPs)
 - Full HTTP header and body inspection
 - Detail pane with a pinned summary, syntax-coloured JSON bodies and hex dumps for binary data
+- PostgreSQL queries decoded from the wire protocol: SQL, parameters, rows, command tags and errors (`proto:pg`)
+- Cleartext HTTP/2 and gRPC: calls shown as `/pkg.Service/Method` with grpc-status and protobuf messages decoded without a schema (`proto:grpc`)
 - Chunked transfer-encoding decoding and gzip / deflate / brotli body decoding
 - Keep-alive connection support
 - Structured filters (`status:5xx`, `dst:api`, `>500ms`, negation) and sort by response time
@@ -120,6 +122,10 @@ tylomon --no-tui --project my-compose-project | jq 'select(.status >= 500)'
 tylomon --project my-compose-project --har session.har
 ```
 
+### PostgreSQL
+
+Queries between containers and a PostgreSQL server appear in the same list as HTTP exchanges, with the SQL, its parameters, the command tag, a preview of the returned rows and any error. Use `proto:pg` to show only queries and `status:5xx` to find failed ones. The example stack in `examples/` includes a database and a client.
+
 ### Run via Docker
 
 ```bash
@@ -171,43 +177,9 @@ With the mouse: click to select, double-click to open, wheel to scroll, drag in 
 
 See the [keybindings reference](https://brpaz.github.io/tylomon/reference/keybindings/) for everything.
 
-## Development
+## Contributing
 
-### Prerequisites
-
-The project uses [devenv.sh](https://devenv.sh/) to manage the development environment. With devenv installed:
-
-```bash
-devenv shell
-```
-
-This provides Rust toolchain, libpcap, [Task](https://taskfile.dev/), [Lefthook](https://github.com/evilmartians/lefthook), cargo-watch, and cargo-nextest.
-
-### Common tasks
-
-```bash
-task fmt          # Format code
-task lint         # Run fmt check + clippy
-task test         # Run tests
-task build        # Build debug binary
-task build:release # Build release binary
-task install      # Build release, install it and grant capabilities (INSTALL_DIR=, SETCAP=)
-task run -- --project myapp  # Build, grant capabilities, run
-task watch        # Watch and rebuild on changes
-task e2e          # Capture the examples/ stack and assert on the exchanges
-task ci           # Run full CI pipeline locally
-task docker:build # Build Docker image locally
-task docs:serve   # Preview the documentation (Zensical)
-```
-
-### Git hooks
-
-[Lefthook](https://github.com/evilmartians/lefthook) is configured with:
-
-- **pre-commit**: format check
-- **pre-push**: format check, clippy, tests
-
-Hooks are installed automatically when entering the devenv shell.
+Bug reports, feature ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers how to report issues, how to set up the development environment and run the tests, and the development process from branch to release.
 
 ## Architecture
 
@@ -226,6 +198,9 @@ src/
     packet.rs       Ethernet/IP/TCP packet parsing (etherparse)
     stream.rs       TCP stream reassembly
     pipeline.rs     Capture and replay threads, HTTP extraction, pcap recording
+    http2.rs        Cleartext HTTP/2 and gRPC decoder
+    protobuf.rs     Schema-less protobuf rendering
+    postgres.rs     PostgreSQL wire protocol decoder
   docker/
     compose.rs      Compose file / COMPOSE_FILE project detection
     discovery.rs    Network discovery and target resolution (bollard)
@@ -256,7 +231,7 @@ scripts/
 
 ## Limitations
 
-- **Plaintext HTTP/1.x only** -- TLS/HTTPS and HTTP/2 traffic between containers is not decoded
+- **Plaintext only** -- decodes HTTP/1.x, HTTP/2 (h2c, including gRPC) and PostgreSQL. TLS/HTTPS, and TLS-encrypted HTTP/2, gRPC and PostgreSQL connections are not decoded. HTTP/2 and PostgreSQL connections must be captured from their start. Only HTTP/2 with prior knowledge (the usual gRPC setup) is supported, not the HTTP/1.1 upgrade
 - **Linux only** -- relies on Docker bridge network interfaces
 - **Requires elevated privileges** -- needs `CAP_NET_RAW` and `CAP_NET_ADMIN` for live capture (replaying a pcap does not)
 

@@ -9,12 +9,14 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 use crate::app::Action;
+use crate::capture::http2::H2Tracker;
 use crate::capture::packet::parse_packet;
+use crate::capture::postgres::PgTracker;
 use crate::capture::stream::{FlowKey, StreamReassembler};
 use crate::export::now_micros;
 use crate::http::encoding::decode_body;
 use crate::http::parser::{get_content_length, is_chunked, parse_request, parse_response};
-use crate::http::types::{HttpExchange, HttpRequest};
+use crate::http::types::{HttpExchange, HttpRequest, Protocol};
 
 const PENDING_REQUEST_TIMEOUT_US: u64 = 30_000_000;
 const STALE_SWEEP_INTERVAL: u64 = 500;
@@ -73,6 +75,8 @@ fn packet_time(packet: &Packet<'_>) -> Micros {
 struct Pipeline {
     reassembler: StreamReassembler,
     pending_requests: HashMap<FlowKey, PendingRequest>,
+    h2: H2Tracker,
+    postgres: PgTracker,
     packet_count: u64,
 }
 
@@ -81,6 +85,8 @@ impl Pipeline {
         Self {
             reassembler: StreamReassembler::new(),
             pending_requests: HashMap::new(),
+            h2: H2Tracker::new(),
+            postgres: PgTracker::new(),
             packet_count: 0,
         }
     }
@@ -92,13 +98,28 @@ impl Pipeline {
             && let Some(stream_data) = self.reassembler.process_packet(&parsed)
             && !parsed.payload.is_empty()
         {
-            let consumed = process_stream_data(
-                &stream_data.flow,
-                &stream_data.data,
-                now,
-                &mut self.pending_requests,
-                action_tx,
-            );
+            let other_protocol = self
+                .h2
+                .process(&stream_data.flow, &stream_data.data, now)
+                .or_else(|| {
+                    self.postgres
+                        .process(&stream_data.flow, &stream_data.data, now)
+                });
+            let consumed = match other_protocol {
+                Some((consumed, exchanges)) => {
+                    for exchange in exchanges {
+                        let _ = action_tx.blocking_send(Action::NewExchange(Box::new(exchange)));
+                    }
+                    consumed
+                }
+                None => process_stream_data(
+                    &stream_data.flow,
+                    &stream_data.data,
+                    now,
+                    &mut self.pending_requests,
+                    action_tx,
+                ),
+            };
             if consumed > 0 {
                 self.reassembler.drain(&stream_data.flow, consumed);
             }
@@ -106,13 +127,34 @@ impl Pipeline {
 
         if self.packet_count.is_multiple_of(STALE_SWEEP_INTERVAL) {
             self.reassembler.cleanup_stale(1024);
+            self.h2.cleanup(1024);
+            self.postgres.cleanup(1024);
             self.sweep(now, action_tx);
+        }
+    }
+
+    /// Report everything still unanswered or open, at the end of a recording.
+    fn finish(&mut self, now: Micros, action_tx: &mpsc::Sender<Action>) {
+        self.sweep(
+            now.saturating_add(PENDING_REQUEST_TIMEOUT_US + 1),
+            action_tx,
+        );
+        for exchange in self.h2.flush_all(now) {
+            let _ = action_tx.blocking_send(Action::NewExchange(Box::new(exchange)));
         }
     }
 
     /// Flush pending requests that have waited longer than the timeout as no-response
     /// exchanges.
     fn sweep(&mut self, now: Micros, action_tx: &mpsc::Sender<Action>) {
+        let stale = self
+            .h2
+            .sweep(now)
+            .into_iter()
+            .chain(self.postgres.sweep(now));
+        for exchange in stale {
+            let _ = action_tx.blocking_send(Action::NewExchange(Box::new(exchange)));
+        }
         let stale_keys: Vec<FlowKey> = self
             .pending_requests
             .iter()
@@ -139,6 +181,7 @@ fn unanswered_exchange(pending: PendingRequest) -> HttpExchange {
         src_port: pending.src_port,
         dst_port: pending.dst_port,
         id: 0,
+        protocol: Protocol::Http,
         timestamp_us: Some(pending.timestamp_us),
         duration_ms: None,
     }
@@ -249,10 +292,7 @@ fn replay(mut capture: Capture<pcap::Offline>, action_tx: &mpsc::Sender<Action>)
     }
 
     // Anything still unanswered at the end of the recording never got a response.
-    pipeline.sweep(
-        last_packet_time.saturating_add(PENDING_REQUEST_TIMEOUT_US + 1),
-        action_tx,
-    );
+    pipeline.finish(last_packet_time, action_tx);
     pipeline.packet_count
 }
 
@@ -400,6 +440,7 @@ fn try_parse_message(
                 src_port: pending.src_port,
                 dst_port: pending.dst_port,
                 id: 0,
+                protocol: Protocol::Http,
                 timestamp_us: Some(pending.timestamp_us),
                 duration_ms,
             };

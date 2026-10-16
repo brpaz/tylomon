@@ -6,7 +6,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::Serialize;
 
-use crate::http::types::HttpExchange;
+use crate::http::types::{HttpExchange, Protocol};
 
 /// Map of IP address to container name used to label exchanges.
 pub type Names = HashMap<String, String>;
@@ -98,6 +98,7 @@ pub fn iso8601(micros: u64) -> String {
 
 #[derive(Serialize)]
 struct JsonlRecord {
+    protocol: &'static str,
     timestamp: Option<String>,
     method: String,
     path: String,
@@ -120,6 +121,7 @@ struct JsonlRecord {
 pub fn jsonl_line(ex: &HttpExchange, names: &Names) -> serde_json::Result<String> {
     let response = ex.response.as_ref();
     serde_json::to_string(&JsonlRecord {
+        protocol: ex.protocol.label(),
         timestamp: ex.timestamp_us.map(iso8601),
         method: ex.request.method.clone(),
         path: ex.request.path.clone(),
@@ -270,6 +272,9 @@ fn shell_quote_bytes(bytes: &[u8]) -> String {
 /// Build a `curl` command that repeats the request.
 pub fn curl_command(ex: &HttpExchange) -> String {
     let mut parts = vec!["curl".to_string()];
+    if ex.request.version == "HTTP/2" {
+        parts.push("--http2-prior-knowledge".to_string());
+    }
     match ex.request.method.as_str() {
         "GET" => {}
         "HEAD" => parts.push("--head".to_string()),
@@ -378,7 +383,8 @@ fn har_entry(ex: &HttpExchange) -> HarEntry {
     }
 }
 
-/// Render exchanges as a HAR 1.2 document.
+/// Render exchanges as a HAR 1.2 document. HAR describes HTTP, so exchanges from other
+/// protocols are left out.
 pub fn har_document<'a>(
     exchanges: impl IntoIterator<Item = &'a HttpExchange>,
 ) -> serde_json::Result<String> {
@@ -389,7 +395,11 @@ pub fn har_document<'a>(
                 name: env!("CARGO_PKG_NAME"),
                 version: env!("CARGO_PKG_VERSION"),
             },
-            entries: exchanges.into_iter().map(har_entry).collect(),
+            entries: exchanges
+                .into_iter()
+                .filter(|ex| ex.protocol == Protocol::Http)
+                .map(har_entry)
+                .collect(),
         },
     })
 }
@@ -432,6 +442,7 @@ mod tests {
             src_port: 40000,
             dst_port: 80,
             id: 0,
+            protocol: Default::default(),
             timestamp_us: Some(1_700_000_000_123_456),
             duration_ms: Some(42),
         }
@@ -515,6 +526,31 @@ mod tests {
         assert_eq!(entry["response"]["content"]["text"], "ok");
         assert_eq!(entry["response"]["content"]["mimeType"], "text/plain");
         assert_eq!(entry["timings"]["wait"], 42);
+    }
+
+    #[test]
+    fn jsonl_names_the_protocol() {
+        let mut ex = exchange();
+        let v: serde_json::Value =
+            serde_json::from_str(&jsonl_line(&ex, &Names::new()).expect("serialise"))
+                .expect("valid json");
+        assert_eq!(v["protocol"], "http");
+        ex.protocol = Protocol::Postgres;
+        let v: serde_json::Value =
+            serde_json::from_str(&jsonl_line(&ex, &Names::new()).expect("serialise"))
+                .expect("valid json");
+        assert_eq!(v["protocol"], "postgres");
+    }
+
+    #[test]
+    fn har_leaves_out_non_http_exchanges() {
+        let http = exchange();
+        let mut sql = exchange();
+        sql.protocol = Protocol::Postgres;
+        let v: serde_json::Value =
+            serde_json::from_str(&har_document([&http, &sql]).expect("serialise"))
+                .expect("valid json");
+        assert_eq!(v["log"]["entries"].as_array().map(Vec::len), Some(1));
     }
 
     #[test]

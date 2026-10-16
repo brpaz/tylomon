@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::http::types::HttpExchange;
+use crate::http::types::{HttpExchange, Protocol};
 
 /// A parsed exchange filter: whitespace-separated terms that must all match.
 ///
@@ -9,6 +9,8 @@ use crate::http::types::HttpExchange;
 /// - `src:api`, `dst:gateway`: substring of the container name or IP
 /// - `method:post`, `path:/users`: substring match
 /// - `status:404`, `status:5xx`, `status:>=400`: exact, class or comparison
+/// - `proto:http`, `proto:pg`, `proto:grpc`: protocol (`postgres`, `postgresql` and `sql`
+///   also work)
 /// - `>500ms`, `<2s`, `>=1s`: response time comparison
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Filter {
@@ -29,6 +31,7 @@ enum Kind {
     Method(String),
     Path(String),
     Status(StatusMatch),
+    Protocol(Protocol),
     Duration(Cmp, u64),
 }
 
@@ -133,6 +136,17 @@ impl Term {
                 "dst" => return Kind::Dst(lower),
                 "method" => return Kind::Method(lower),
                 "path" => return Kind::Path(lower),
+                "proto" | "protocol" => {
+                    let protocol = match lower.as_str() {
+                        "http" => Some(Protocol::Http),
+                        "postgres" | "postgresql" | "pg" | "sql" => Some(Protocol::Postgres),
+                        "grpc" => Some(Protocol::Grpc),
+                        _ => None,
+                    };
+                    if let Some(protocol) = protocol {
+                        return Kind::Protocol(protocol);
+                    }
+                }
                 "status" => {
                     if let Some(status) = StatusMatch::parse(value) {
                         return Kind::Status(status);
@@ -171,6 +185,7 @@ impl Term {
                 .response
                 .as_ref()
                 .is_some_and(|r| status.matches(r.status_code)),
+            Kind::Protocol(protocol) => ex.protocol == *protocol,
             Kind::Duration(cmp, ms) => ex.duration_ms.is_some_and(|d| cmp.apply(d, *ms)),
         };
         hit != self.negate
@@ -219,6 +234,7 @@ mod tests {
             src_port: 40000,
             dst_port: 80,
             id: 0,
+            protocol: Default::default(),
             timestamp_us: None,
             duration_ms: ms,
         }
@@ -322,6 +338,22 @@ mod tests {
         assert!(check("status:abc", &ex));
         let ex = exchange("GET", "/", Some(200), None);
         assert!(!check("status:abc", &ex));
+    }
+
+    #[test]
+    fn protocol_key_selects_by_protocol() {
+        let http = exchange("GET", "/", Some(200), None);
+        let mut sql = exchange("SELECT", "select 1", Some(200), None);
+        sql.protocol = Protocol::Postgres;
+        assert!(check("proto:http", &http));
+        assert!(!check("proto:http", &sql));
+        assert!(check("proto:pg", &sql));
+        assert!(check("protocol:postgres", &sql));
+        assert!(!check("proto:pg", &http));
+        assert!(check(
+            "proto:nonsense",
+            &exchange("GET", "/proto:nonsense", None, None)
+        ));
     }
 
     #[test]

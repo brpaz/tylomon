@@ -5,6 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem};
 
 use crate::app::{App, SortMode};
+use crate::http::types::Protocol;
 use crate::tui::theme::Theme;
 
 pub fn render(frame: &mut Frame, app: &mut App, area: Rect, focused: bool) {
@@ -39,13 +40,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect, focused: bool) {
     let items: Vec<ListItem> = filtered
         .iter()
         .map(|(_, exchange)| {
-            let method_style = match exchange.request.method.as_str() {
-                "GET" => Theme::method_get(),
-                "POST" => Theme::method_post(),
-                "PUT" | "PATCH" => Theme::method_put(),
-                "DELETE" => Theme::method_delete(),
-                _ => Theme::dim(),
-            };
+            let method_style = Theme::method(&exchange.request.method);
 
             let status_style = match exchange.response.as_ref().map(|r| r.status_code) {
                 Some(code) if code < 300 => Theme::status_success(),
@@ -55,11 +50,13 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect, focused: bool) {
                 None => Theme::dim(),
             };
 
-            let status_text = exchange
-                .response
-                .as_ref()
-                .map(|r| format!("{}", r.status_code))
-                .unwrap_or_else(|| "...".to_string());
+            let status_text = match (&exchange.response, exchange.protocol) {
+                (None, _) => "...".to_string(),
+                (Some(r), Protocol::Postgres) if r.status_code < 400 => "OK".to_string(),
+                (Some(_), Protocol::Postgres) => "ERR".to_string(),
+                (Some(r), Protocol::Grpc) => r.reason.clone(),
+                (Some(r), Protocol::Http) => r.status_code.to_string(),
+            };
 
             let duration_style = Theme::duration(exchange.duration_ms);
             let duration_text = exchange
@@ -79,7 +76,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect, focused: bool) {
                 .unwrap_or(&exchange.dst_ip);
 
             let line = Line::from(vec![
-                Span::styled(format!("{:<7}", exchange.request.method), method_style),
+                Span::styled(format!("{:<8}", exchange.request.method), method_style),
                 Span::raw(exchange.request.path.clone()),
                 Span::raw(" "),
                 Span::styled(status_text, status_style),

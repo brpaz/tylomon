@@ -754,6 +754,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fluke-hpack"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60608dc8ab0a0af790a360b85c3e80a7b50022cd0fc5637a288e25c73e20bd8e"
+dependencies = [
+ "tracing",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2762,6 +2771,7 @@ dependencies = [
  "crossterm",
  "etherparse",
  "flate2",
+ "fluke-hpack",
  "futures",
  "httparse",
  "libc",

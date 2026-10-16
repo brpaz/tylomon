@@ -45,6 +45,9 @@ src/
     packet.rs          # Raw bytes → ParsedPacket via etherparse
     stream.rs          # TCP stream reassembly with FlowKey tracking
     pipeline.rs        # Capture/replay threads, HTTP extraction, pcap recording
+    http2.rs           # Cleartext HTTP/2 + gRPC decoder (H2Tracker)
+    protobuf.rs        # Schema-less protobuf rendering
+    postgres.rs        # PostgreSQL wire protocol decoder (PgTracker)
   docker/
     compose.rs         # Compose file and COMPOSE_FILE project detection
     discovery.rs       # Network discovery, Target resolution (bollard)
@@ -103,11 +106,19 @@ The pipeline finds request/response pairs in the reassembled data:
 - Measures response time from packet timestamps, so live capture and replay agree
 - Flushes requests with no response after 30 seconds (or at the end of a replayed file) as unanswered
 
-### 5. Container resolution
+### 5. Other protocols
+
+Before trying HTTP/1.x, the pipeline asks the `H2Tracker` and then the `PgTracker` whether a stream belongs to them.
+
+**HTTP/2 and gRPC.** A client connection preface identifies cleartext HTTP/2. The tracker parses frames in both directions, decodes header blocks with one HPACK context per direction (every block must be decoded, even for streams it ignores, or the dynamic table drifts) and keeps per-stream state. A stream ends at the server's `END_STREAM` or a `RST_STREAM`. Streams with an `application/grpc` request become `Protocol::Grpc` exchanges: the status comes from the `grpc-status` trailer (200 for `OK`, else 500 with the status name), and each length-prefixed message is decompressed if needed and rendered by `protobuf.rs` without a schema. Other streams become HTTP exchanges with version `HTTP/2`. Streams that have started a response (such as long-lived streaming calls) stay open until they end; at the end of a replayed file everything still open is reported.
+
+**PostgreSQL.** A flow is recognised by its first bytes (a protocol 3.0 startup, SSL, GSSAPI or cancel request) and then followed in both directions as a connection: the tracker parses typed messages, remembers prepared statements and portals, and pairs each `Query` or `Execute` with the server messages that answer it (`RowDescription`, `DataRow`, `CommandComplete`, `ErrorResponse`, `ReadyForQuery`). Finished queries are emitted as exchanges with `Protocol::Postgres`, reusing the HTTP structures: the verb is the method, the SQL is the path and body, and the status is 200 or 500. Connections that switch to TLS are reported once and not decoded. Unanswered queries are flushed after 30 seconds like HTTP requests.
+
+### 6. Container resolution
 
 A separate async task re-resolves the target and polls the Docker API every 5 seconds to maintain an IP-to-container-name mapping, so the capture threads are never blocked by Docker calls.
 
-### 6. State and rendering
+### 7. State and rendering
 
 `App` owns all state: exchanges (each with a unique id), the selected id, filter, sort, view mode, split width, zoom, text selection, and the cached detail rows for the selected exchange. Selection is tracked by exchange id, so it survives new traffic, sorting and filtering.
 
@@ -115,7 +126,7 @@ Views render from `App` at 30fps. The few things they write back are layout fact
 
 Capture failures are kept per interface in `App` and shown as a banner until that capture runs again or its network goes away.
 
-### 7. Output
+### 8. Output
 
 In the TUI, `e` writes the listed exchanges to a HAR file and `3` copies a `curl` command. In headless mode each completed exchange is written to stdout as one JSON object, and `--har` writes everything captured on exit.
 

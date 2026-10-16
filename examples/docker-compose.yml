@@ -10,18 +10,22 @@
 #   sudo tylomon --project tylomon-example
 #   sudo tylomon --network tylomon-example_default
 #
-# The setup creates three services:
-#   - api:      Nginx serving a simple JSON endpoint
-#   - poller:   Hits the API every 2 seconds
-#   - gateway:  Nginx reverse proxy that forwards to the API
+# The setup creates five services:
+#   - api:       Nginx serving a simple JSON endpoint
+#   - poller:    Hits the API every 2 seconds
+#   - gateway:   Nginx reverse proxy that forwards to the API
+#   - db:        PostgreSQL
+#   - sqlclient: Runs a few queries against the database every 3 seconds
 #
 # Traffic flow:
 #   poller → gateway → api
+#   sqlclient → db            (PostgreSQL, one query fails on purpose)
 #
 # Services sit on two networks (frontend: poller/gateway, backend: gateway/api), so
 # tylomon captures on both bridges when the project is selected.
 #
-# You should see HTTP requests between all three containers in tylomon.
+# You should see HTTP requests between the first three containers and SQL queries between
+# the last two in tylomon (try the filter `proto:pg`).
 
 name: tylomon-example
 
@@ -63,6 +67,39 @@ services:
                http://gateway/api/echo
           echo ""
           sleep 2
+        done
+
+  db:
+    image: postgres:18-alpine
+    networks: [backend]
+    environment:
+      POSTGRES_PASSWORD: example
+      POSTGRES_DB: shop
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shop"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  sqlclient:
+    image: postgres:18-alpine
+    networks: [backend]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: example
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        while true; do
+          psql -h db -U postgres -d shop \
+            -c "CREATE TABLE IF NOT EXISTS visits (id serial PRIMARY KEY, path text UNIQUE)" \
+            -c "INSERT INTO visits (path) VALUES ('/home') ON CONFLICT DO NOTHING" \
+            -c "SELECT id, path FROM visits ORDER BY id" \
+            -c "INSERT INTO visits (path) VALUES ('/home')"
+          sleep 3
         done
 
 networks:

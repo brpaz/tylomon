@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-tylomon is a Rust CLI/TUI tool that monitors plaintext HTTP traffic between Docker containers. It captures packets on Docker bridge interfaces using libpcap, reassembles TCP streams, parses HTTP request/response pairs, and renders them in a Ratatui terminal dashboard.
+tylomon is a Rust CLI/TUI tool that monitors plaintext traffic between Docker containers: HTTP/1.x, cleartext HTTP/2 and gRPC, and PostgreSQL. It captures packets on Docker bridge interfaces using libpcap, reassembles TCP streams, parses request/response pairs, and renders them in a Ratatui terminal dashboard.
 
 ## Build & Run Commands
 
@@ -69,6 +69,9 @@ src/
     packet.rs          # parse_packet() — raw bytes → ParsedPacket via etherparse
     stream.rs          # StreamReassembler — TCP flow tracking, sequence reassembly, drain()
     pipeline.rs        # Capture/replay threads, HTTP extraction, pcap Recorder, stale sweep
+    http2.rs           # Cleartext HTTP/2 + gRPC decoder (H2Tracker): frames, HPACK, streams
+    protobuf.rs        # Schema-less protobuf rendering for gRPC messages
+    postgres.rs        # PostgreSQL wire protocol decoder (PgTracker), emits Protocol::Postgres exchanges
   docker/
     compose.rs         # Compose file / COMPOSE_FILE project detection
     discovery.rs       # Target resolution, network discovery via bollard

@@ -73,9 +73,10 @@ Each line has these fields:
 
 | Field | Description |
 |-------|-------------|
+| `protocol` | `http`, `postgres` or `grpc` |
 | `timestamp` | Request time, ISO 8601 UTC |
-| `method`, `path`, `http_version` | Request line |
-| `status` | Response status, `null` if no response was seen |
+| `method`, `path`, `http_version` | Request line. For PostgreSQL: statement verb, SQL on one line, `PostgreSQL` |
+| `status` | Response status, `null` if no response was seen. For PostgreSQL: 200 on success, 500 on error |
 | `duration_ms` | Request to response time, `null` if unanswered |
 | `src`, `dst` | Container name, or IP when unresolved |
 | `src_ip`, `dst_ip`, `src_port`, `dst_port` | Connection endpoints |
@@ -92,7 +93,7 @@ Write all captured exchanges to a [HAR 1.2](http://www.softwareishard.com/blog/h
 tylomon --project myapp --har session.har
 ```
 
-Unanswered requests are exported with status `0` and timings of `-1`. The request URL uses the `Host` header, falling back to the destination address.
+PostgreSQL exchanges are left out, since HAR describes HTTP. Unanswered requests are exported with status `0` and timings of `-1`. The request URL uses the `Host` header, falling back to the destination address.
 
 ## `--log-file`
 

@@ -51,6 +51,10 @@ const SECTIONS: &[(&str, &[(&str, &str)])] = &[
             ("src:api dst:db", "Container name or IP"),
             ("status:5xx", "Also status:404, status:>=400"),
             (">500ms", "Response time; also <2s, >=1s"),
+            (
+                "proto:pg",
+                "PostgreSQL queries; also proto:grpc, proto:http",
+            ),
             ("!term  -term", "Negate a term"),
         ],
     ),

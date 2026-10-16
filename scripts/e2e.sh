@@ -49,6 +49,10 @@ assert "poller -> gateway POST /api/echo returns 200 with a body" \
   '.method == "POST" and .path == "/api/echo" and .status == 200 and .request_body.text != null and .response_body.text != null'
 assert "gateway -> api hop captured on the second network" \
   '.path == "/health" and .status == 200 and (.src | test("gateway")) and (.dst | test("api"))'
+assert "sqlclient -> db SELECT is decoded as PostgreSQL with its rows" \
+  '.protocol == "postgres" and .method == "SELECT" and .status == 200 and (.src | test("sqlclient")) and (.dst | test("db")) and (.request_body.text | test("visits")) and (.response_body.text | test("/home"))'
+assert "PostgreSQL error is reported with its SQLSTATE" \
+  '.protocol == "postgres" and .status == 500 and any(.response_headers[]; .name == "SQLSTATE" and .value == "23505")'
 assert "response times are measured" \
   '.duration_ms != null'
 

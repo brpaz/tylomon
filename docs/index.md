@@ -15,6 +15,7 @@ tylomon captures packets on Docker bridge network interfaces, reassembles TCP st
 - **Container names** — resolves container IPs to human-readable names
 - **Full inspection** — complete HTTP headers and bodies for requests and responses, in a detail pane with a pinned summary
 - **Readable bodies** — pretty-printed, syntax-coloured JSON, decoded gzip/deflate/brotli and chunked bodies, and hex dumps for binary data
+- **PostgreSQL** — decodes the PostgreSQL wire protocol: SQL text, bound parameters, rows returned, command tags and errors with their SQLSTATE
 - **Filters and sorting** — `status:5xx dst:api >500ms -path:/health`, and sort by response time
 - **Service map** — requests, errors and p50/p95 latency per source and destination
 - **Record and replay** — save traffic to a pcap file and open it later without root or Docker
@@ -56,6 +57,6 @@ docker run --rm -it \
 
 ## Limitations
 
-- **Plaintext HTTP/1.x only** — TLS/HTTPS and HTTP/2 traffic between containers is not decoded
+- **Plaintext only** — decodes HTTP/1.x and PostgreSQL. TLS/HTTPS, HTTP/2 (including gRPC) and TLS-encrypted PostgreSQL connections are not decoded
 - **Linux only** — relies on Docker bridge network interfaces
 - **Requires elevated privileges** — needs `CAP_NET_RAW` and `CAP_NET_ADMIN` for live capture

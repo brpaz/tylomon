@@ -1,5 +1,7 @@
 # Development Setup
 
+How to set up the environment and run the checks. Reporting issues and the pull request and release process are in [Contributing](contributing.md).
+
 ## Prerequisites
 
 The project uses [devenv.sh](https://devenv.sh/) to manage an isolated, reproducible development environment. Install devenv first, then:
@@ -16,6 +18,7 @@ This provides:
 - [Lefthook](https://github.com/evilmartians/lefthook) — git hooks
 - [cargo-watch](https://github.com/watchexec/cargo-watch) — rebuild on file changes
 - [cargo-nextest](https://nexte.st/) — fast test runner
+- [uv](https://docs.astral.sh/uv/) — runs the documentation tooling
 
 Git hooks are installed automatically when entering the devenv shell.
 
@@ -88,12 +91,14 @@ sudo setcap cap_net_raw,cap_net_admin=eip ../target/debug/tylomon
 
 ## CI pipeline
 
-GitHub Actions runs on push to `main`, tags, and pull requests:
+GitHub Actions runs `CI` on pushes to `main`, on pull requests and when a release is published:
 
 1. **Check & Test** — formatting, clippy, tests
 2. **End-to-end** — builds the debug binary and runs `scripts/e2e.sh` against the example stack
-3. **Build Binary** — release build, uploaded as artifact
-4. **Build & Push Docker** — multi-arch image (amd64 + arm64) pushed to `ghcr.io` on releases
+3. **Build Binary** — release build, uploaded as artifact and attached to published releases
+4. **Build & Push Docker** — multi-arch image (amd64 + arm64) pushed to `ghcr.io`, for published releases only
+
+Two more workflows run on pushes to `main`: `Docs` builds and deploys this site when the docs change, and `Draft release` updates the draft release notes from the Conventional Commits since the last release.
 
 Run the full pipeline locally:
 

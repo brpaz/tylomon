@@ -5,7 +5,7 @@
 ![project logo](./docs/assets/logo.webp)
 
 ![CI](https://img.shields.io/github/actions/workflow/status/brpaz/tylomon/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)
-![License](https://img.shields.io/github/license/brpaz/tylomon?style=for-the-badge)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 ![Rust](https://img.shields.io/badge/Rust-2024_edition-orange?style=for-the-badge&logo=rust&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
 [![Docs](https://img.shields.io/badge/docs-brpaz.github.io-blue?style=for-the-badge&logo=markdown&logoColor=white)](https://brpaz.github.io/tylomon)

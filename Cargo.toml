@@ -37,7 +37,7 @@ brotli = "=9.0.0"
 clap = { version = "=4.6.7", features = ["derive"] }
 
 # Error handling
-anyhow = "1"
+anyhow = "=1.0.104"
 
 # Serialization
 base64 = "=0.23.1"
@@ -54,7 +54,7 @@ tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 tracing-appender = "=0.2.5"
 
 [dev-dependencies]
-libc = "=0.2.190"
+libc = "=0.2.191"
 pretty_assertions = "=1.4.1"
 
 [profile.release]

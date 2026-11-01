@@ -1,37 +1,55 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:best-practices",
-    ":automergeMinor",
-    ":prConcurrentLimit10"
-  ],
-  "labels": [
-    "dependencies"
-  ],
+  "extends": ["config:best-practices"],
+  "labels": ["dependencies"],
   "rangeStrategy": "pin",
   "minimumReleaseAge": "3 days",
   "vulnerabilityAlerts": {
     "enabled": true,
-    "labels": ["security"]
+    "labels": ["security"],
+    "reviewers": ["brpaz"]
   },
   "osvVulnerabilityAlerts": true,
   "packageRules": [
     {
+      "description": "GitHub Actions: pinned updates grouped and automerged on green CI",
       "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "github actions"
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "github actions",
+      "automerge": true
     },
     {
-      "matchManagers": [
-        "cargo"
-      ],
+      "description": "Dev tooling: non-major updates grouped and automerged on green CI",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "dev dependencies",
+      "automerge": true
+    },
+    {
+      "description": "Container images are reviewed manually and wait a week before a PR can merge",
+      "matchDatasources": ["docker"],
+      "automerge": false,
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "Docker Hub restarts a digest's age whenever a tag is re-pushed, which would keep digest updates pending",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["digest", "pinDigest"],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "Majors need a human",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "reviewers": ["brpaz"]
+    },
+    {
+      "matchManagers": ["cargo"],
       "groupName": "rust dependencies",
       "automerge": false
     },
     {
-      "matchManagers": [
-        "dockerfile"
-      ],
+      "matchManagers": ["dockerfile"],
       "groupName": "docker",
       "automerge": false
     }
@@ -40,5 +58,7 @@
     "enabled": true,
     "schedule": ["before 5am on the first day of the month"],
     "automerge": true
-  }
+  },
+  "prConcurrentLimit": 5,
+  "schedule": ["before 6am on monday"]
 }

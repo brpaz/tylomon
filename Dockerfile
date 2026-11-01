@@ -1,4 +1,4 @@
-FROM rust:1-bookworm@sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922 AS builder
+FROM rust:1-bookworm@sha256:9181b56c2a21ab1d5e73cffe04fc762426d30aa7fac3c91141dd033f49a7fc8b AS builder
 
 RUN apt-get update && apt-get install -y libpcap-dev pkg-config && rm -rf /var/lib/apt/lists/*
 
@@ -9,7 +9,7 @@ RUN mkdir src && echo 'fn main() {}' > src/main.rs && cargo build --release && r
 COPY . .
 RUN touch src/main.rs && cargo build --release --locked
 
-FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
+FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3
 
 RUN apt-get update && apt-get install -y libpcap0.8 && rm -rf /var/lib/apt/lists/*
 

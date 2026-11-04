@@ -22,7 +22,7 @@ jobs:
 
       # Referenced by tag, not commit SHA: the action downloads the release binary named
       # by its own ref.
-      - uses: brpaz/draftsman@v0.3.0
+      - uses: brpaz/draftsman@c8359ed96a2b991e763bd5f11cf2b5c1353e934c # v0.3.1
         with:
           command: draft
           backend: github

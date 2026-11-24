@@ -25,7 +25,7 @@ bollard = "=0.21.1"
 
 # Packet capture & parsing
 pcap = { version = "=2.5.0", features = ["capture-stream"] }
-etherparse = "=0.21.0"
+etherparse = "=0.21.1"
 
 # HTTP parsing
 httparse = "=1.10.1"
